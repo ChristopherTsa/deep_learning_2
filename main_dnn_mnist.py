@@ -1,9 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from models.dnn import DNN
-from models.dbn import DBN
-from utils.data_utils import load_mnist, one_hot_encode
-from utils.visualization import plot_performance_comparison
+from models import DNN, DBN
+from utils import load_mnist, one_hot_encode, plot_performance_comparison
 
 # Set random seed for reproducibility
 np.random.seed(42)
@@ -110,8 +108,10 @@ def compare_layer_count(X_train, y_train_onehot, X_test, y_test_onehot,
     pretrained_errors = []
     random_errors = []
     
-    for n_layers in layer_counts:
-        print(f"\n=== Testing with {n_layers} hidden layers ===")
+    total_experiments = len(layer_counts)
+    
+    for i, n_layers in enumerate(layer_counts):
+        print(f"\n=== Testing with {n_layers} hidden layers ({i+1}/{total_experiments}) ===")
         
         # Create layer sizes [input, hidden1, hidden2, ..., output]
         layer_sizes = [input_size] + [base_neurons] * n_layers + [output_size]
@@ -120,13 +120,13 @@ def compare_layer_count(X_train, y_train_onehot, X_test, y_test_onehot,
         _, _, pretrained_error = train_and_evaluate(
             X_train, y_train_onehot, X_test, y_test_onehot, 
             layer_sizes, use_pretraining=True, 
-            pretrain_epochs=100, train_epochs=200, verbose=False)  # Ajusté aux valeurs recommandées
+            pretrain_epochs=100, train_epochs=200, verbose=True)  # Changed to True to show progress
         
         print("Training with random initialization...")
         _, _, random_error = train_and_evaluate(
             X_train, y_train_onehot, X_test, y_test_onehot, 
             layer_sizes, use_pretraining=False,
-            train_epochs=200, verbose=False)  # Ajusté à 200 époques
+            train_epochs=200, verbose=True)  # Changed to True to show progress
         
         pretrained_errors.append(pretrained_error)
         random_errors.append(random_error)

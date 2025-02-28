@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from models.rbm import RBM
-from utils.data_utils import load_binary_alphadigits, display_binary_images
+from models import RBM
+from utils import load_binary_alphadigits, display_binary_images
 
 # Parameters - as specified in the project
 n_hidden = 100

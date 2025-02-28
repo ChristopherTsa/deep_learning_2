@@ -1,6 +1,6 @@
 import numpy as np
 from models.dbn import DBN
-from utils.data_utils import load_binary_alphadigits, display_binary_images
+from utils import load_binary_alphadigits, display_binary_images
 
 # Parameters - adjusted to align with project specs
 layer_sizes = [320, 200, 100]  # 20x16=320 input size
