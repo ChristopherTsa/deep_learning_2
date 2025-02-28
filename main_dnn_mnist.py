@@ -298,6 +298,13 @@ def run_experiments():
     """Run all experiments and generate plots."""
     print("Loading MNIST dataset...")
     X_train, y_train, X_test, y_test = load_mnist(binarize_threshold=0.5, normalize=True)
+    
+    # Convert pandas Series to numpy arrays if necessary
+    if hasattr(y_train, 'to_numpy'):
+        y_train = y_train.to_numpy()
+    if hasattr(y_test, 'to_numpy'):
+        y_test = y_test.to_numpy()
+        
     y_train_onehot = one_hot_encode(y_train)
     y_test_onehot = one_hot_encode(y_test)
     
