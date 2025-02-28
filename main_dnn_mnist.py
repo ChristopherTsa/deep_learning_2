@@ -308,8 +308,6 @@ def run_experiments():
     y_train_onehot = one_hot_encode(y_train)
     y_test_onehot = one_hot_encode(y_test)
     
-    print(f"MNIST loaded: {X_train.shape[0]} training samples, {X_test.shape[0]} test samples")
-    
     # Compare number of layers
     print("\n=== EXPERIMENT 1: COMPARING NUMBER OF LAYERS ===")
     layer_counts, pretrained_layer_errors, random_layer_errors = compare_layer_count(
