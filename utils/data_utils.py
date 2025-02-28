@@ -26,7 +26,6 @@ def load_mnist(binarize_threshold=0.5, normalize=True):
     y_test: array-like
         Test labels
     """
-    print("Loading MNIST dataset...")
     X, y = fetch_openml('mnist_784', version=1, return_X_y=True, parser='auto')
     
     # Convert to float and normalize if requested
