@@ -1,6 +1,7 @@
 import numpy as np
 import os
 import pickle
+from joblib import Parallel, delayed
 from models import DNN, DBN
 from utils import (
     load_mnist, one_hot_encode, plot_performance_comparison,
@@ -125,13 +126,11 @@ def compare_layer_count(X_train, y_train_onehot, X_test, y_test_onehot,
     output_size = y_train_onehot.shape[1]
     
     layer_counts = list(range(2, max_layers + 1))  # Number of hidden layers
-    pretrained_errors = []
-    random_errors = []
-    
     total_experiments = len(layer_counts)
     
-    for i, n_layers in enumerate(layer_counts):
-        print(f"\n=== Testing with {n_layers} hidden layers ({i+1}/{total_experiments}) ===")
+    # Define a function to train one configuration in parallel
+    def train_for_layer_count(n_layers):
+        print(f"\n=== Testing with {n_layers} hidden layers ===")
         
         # Create layer sizes [input, hidden1, hidden2, ..., output]
         layer_sizes = [input_size] + [base_neurons] * n_layers + [output_size]
@@ -148,11 +147,19 @@ def compare_layer_count(X_train, y_train_onehot, X_test, y_test_onehot,
             layer_sizes, use_pretraining=False,
             train_epochs=200, verbose=True)
         
-        pretrained_errors.append(pretrained_error)
-        random_errors.append(random_error)
-        
         print(f"Pre-trained error: {pretrained_error:.4f}")
         print(f"Random init error: {random_error:.4f}")
+        
+        return (pretrained_error, random_error)
+    
+    # Execute the tasks in parallel
+    results = Parallel(n_jobs=-1)(
+        delayed(train_for_layer_count)(n_layers) for n_layers in layer_counts
+    )
+    
+    # Extract results
+    pretrained_errors = [res[0] for res in results]
+    random_errors = [res[1] for res in results]
     
     # Use the plot_multiple_curves function instead of direct plotting
     curves_dict = {
@@ -196,11 +203,9 @@ def compare_neuron_count(X_train, y_train_onehot, X_test, y_test_onehot,
     
     if neuron_counts is None:
         neuron_counts = [100, 200, 300, 400, 500, 700]
-        
-    pretrained_errors = []
-    random_errors = []
     
-    for n_neurons in neuron_counts:
+    # Define a function to train one configuration in parallel
+    def train_for_neuron_count(n_neurons):
         print(f"\n=== Testing with {n_neurons} neurons per layer ===")
         
         # Create layer sizes [input, hidden1, hidden2, ..., output]
@@ -218,11 +223,19 @@ def compare_neuron_count(X_train, y_train_onehot, X_test, y_test_onehot,
             layer_sizes, use_pretraining=False,
             train_epochs=200, verbose=False)
         
-        pretrained_errors.append(pretrained_error)
-        random_errors.append(random_error)
-        
         print(f"Pre-trained error: {pretrained_error:.4f}")
         print(f"Random init error: {random_error:.4f}")
+        
+        return (pretrained_error, random_error)
+    
+    # Execute the tasks in parallel
+    results = Parallel(n_jobs=-1)(
+        delayed(train_for_neuron_count)(n_neurons) for n_neurons in neuron_counts
+    )
+    
+    # Extract results
+    pretrained_errors = [res[0] for res in results]
+    random_errors = [res[1] for res in results]
     
     # Use the plot_multiple_curves function instead of direct plotting
     curves_dict = {
@@ -268,11 +281,9 @@ def compare_training_size(X_train, y_train, y_train_onehot, X_test, y_test_oneho
     
     if sample_sizes is None:
         sample_sizes = [1000, 3000, 7000, 10000, 30000, 60000]
-            
-    pretrained_errors = []
-    random_errors = []
     
-    for size in sample_sizes:
+    # Define a function to train one configuration in parallel
+    def train_for_sample_size(size):
         if size > X_train.shape[0]:
             size = X_train.shape[0]
             
@@ -299,11 +310,19 @@ def compare_training_size(X_train, y_train, y_train_onehot, X_test, y_test_oneho
             layer_sizes, use_pretraining=False,
             train_epochs=200, verbose=False)
         
-        pretrained_errors.append(pretrained_error)
-        random_errors.append(random_error)
-        
         print(f"Pre-trained error: {pretrained_error:.4f}")
         print(f"Random init error: {random_error:.4f}")
+        
+        return (pretrained_error, random_error)
+    
+    # Execute the tasks in parallel
+    results = Parallel(n_jobs=-1)(
+        delayed(train_for_sample_size)(size) for size in sample_sizes
+    )
+    
+    # Extract results
+    pretrained_errors = [res[0] for res in results]
+    random_errors = [res[1] for res in results]
     
     # Use the plot_multiple_curves function instead of direct plotting
     curves_dict = {
