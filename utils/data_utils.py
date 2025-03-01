@@ -94,12 +94,17 @@ def load_mnist(binarize_threshold=0.5, normalize=True, use_cache=True):
     if binarize_threshold is not None:
         X = Binarizer(threshold=binarize_threshold).fit_transform(X)
     
-    # Convert labels to integers
+    # Convert labels to integers and ensure they're numpy arrays
     y = y.astype(int)
     
     # Split into train and test sets
     X_train, X_test = X[:60000], X[60000:]
     y_train, y_test = y[:60000], y[60000:]
+    
+    # Convert pandas Series to numpy arrays if needed
+    if hasattr(y_train, 'to_numpy'):
+        y_train = y_train.to_numpy()
+        y_test = y_test.to_numpy()
     
     # Always one-hot encode the labels
     encoder = OneHotEncoder(sparse_output=False)
