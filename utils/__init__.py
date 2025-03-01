@@ -10,17 +10,13 @@ from .data_utils import (
 
 # Visualization functions
 from .visualization import (
-    # General plotting functions
-    plot_loss_curve,
-    plot_multiple_curves,
-    plot_performance_comparison,
+    # Plotting functions
+    plot_losses,
+    plot_comparison,
     
-    # Image visualization functions
+    # Visualization functions
     display_binary_images,
-    
-    # Model-specific visualization functions
-    plot_rbm_weights,
-    plot_dbn_pretraining_errors
+    display_weights
 )
 
 __all__ = [
@@ -31,15 +27,11 @@ __all__ = [
     # Data preprocessing functions
     'one_hot_encode',
     
-    # General plotting functions
-    'plot_loss_curve',
-    'plot_multiple_curves',
-    'plot_performance_comparison',
+    # Plotting functions
+    'plot_losses',
+    'plot_comparison',
     
-    # Image visualization functions
+    # Visualization functions
     'display_binary_images',
-    
-    # Model-specific visualization functions
-    'plot_rbm_weights',
-    'plot_dbn_pretraining_errors'
+    'display_weights'
 ]

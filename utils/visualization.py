@@ -3,109 +3,63 @@ import matplotlib.pyplot as plt
 import math
 
 #===============================================================================
-# General Plotting Functions
+# Plotting Functions
 #===============================================================================
 
-def plot_loss_curve(losses, title="Training Loss", xlabel="Epoch", ylabel="Loss", save_path=None):
-    """Plot a single loss curve."""
-    plt.figure(figsize=(10, 6))
-    plt.plot(losses)
-    plt.title(title)
-    plt.xlabel(xlabel)
-    plt.ylabel(ylabel)
-    plt.grid(True)
-    
-    # Save figure if a path is provided
-    if save_path:
-        plt.savefig(save_path)
-        print(f"Figure saved to {save_path}")
-        
-    plt.show()
-
-def plot_multiple_curves(curves_dict, title="Loss Comparison", xlabel="Epoch", ylabel="Loss", save_path=None):
+def plot_losses(losses, title="Training Loss", xlabel="Epoch", ylabel="Loss", 
+               layer_names=None, save_path=None):
     """
-    Plot multiple curves on the same graph.
+    Plot one or more loss curves.
     
     Parameters:
     -----------
-    curves_dict: dict
-        Dictionary mapping curve names to y-values
-    save_path: str, optional
-        Path to save the figure
-    """
-    plt.figure(figsize=(12, 7))
-    
-    for name, values in curves_dict.items():
-        plt.plot(values, label=name)
-    
-    plt.title(title)
-    plt.xlabel(xlabel)
-    plt.ylabel(ylabel)
-    plt.grid(True)
-    plt.legend()
-    
-    # Save figure if a path is provided
-    if save_path:
-        plt.savefig(save_path)
-        print(f"Figure saved to {save_path}")
-        
-    plt.show()
-
-def plot_performance_comparison(x_values, pretrained_errors, random_errors, 
-                              xlabel, ylabel, title, save_path=None):
-    """
-    Plot comparison between pretrained and randomly initialized network performance.
-    
-    Parameters:
-    -----------
-    x_values: list
-        X-axis values (e.g., number of layers, neurons, or training samples)
-    pretrained_errors: list
-        Error rates for pretrained networks
-    random_errors: list
-        Error rates for randomly initialized networks
+    losses: list or list of lists
+        Single loss curve or multiple loss curves (e.g., one per layer)
+    title: str
+        Plot title
     xlabel: str
         X-axis label
     ylabel: str
         Y-axis label
-    title: str
-        Plot title
+    layer_names: list of str, optional
+        Names for each loss curve (e.g., 'Layer 1', 'Layer 2')
     save_path: str, optional
         Path to save the figure
+        
+    Returns:
+    --------
+    fig: matplotlib Figure object
+        The created figure (for further manipulation if needed)
     """
-    plt.figure(figsize=(12, 8))
+    fig = plt.figure(figsize=(10, 6))
     
-    plt.plot(x_values, pretrained_errors, 'b-o', label='Pre-trained Network')
-    plt.plot(x_values, random_errors, 'r-s', label='Random Initialization')
+    # Check if losses is a list of lists (multiple curves)
+    if losses and isinstance(losses[0], (list, np.ndarray)):
+        # Multiple loss curves
+        for i, curve in enumerate(losses):
+            label = layer_names[i] if layer_names and i < len(layer_names) else f'Layer {i+1}'
+            plt.plot(curve, label=label)
+        plt.legend()
+    else:
+        # Single loss curve
+        plt.plot(losses)
     
+    plt.title(title)
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
-    plt.title(title)
     plt.grid(True)
-    plt.legend()
     
-    # Add data value labels
-    for i, (x, y1, y2) in enumerate(zip(x_values, pretrained_errors, random_errors)):
-        plt.annotate(f'{y1:.4f}', (x, y1), textcoords="offset points", 
-                     xytext=(0,10), ha='center')
-        plt.annotate(f'{y2:.4f}', (x, y2), textcoords="offset points", 
-                     xytext=(0,-15), ha='center')
-    
-    plt.tight_layout()
-    
-    # Use provided save_path or default based on title
+    # Save figure if a path is provided
     if save_path:
         plt.savefig(save_path)
         print(f"Figure saved to {save_path}")
-    elif title:
-        file_path = f"{title.replace(' ', '_')}.png"
-        plt.savefig(file_path)
-        print(f"Figure saved to {file_path}")
-    
+        
     plt.show()
+    
+    return fig
 
-def plot_neural_net_comparison(x_values, pretrained_errors, random_errors, 
-                              xlabel, ylabel, title, dual_plot=True, save_path=None):
+def plot_comparison(x_values, pretrained_errors, random_errors, 
+                   xlabel, ylabel, title, dual_plot=True, save_path=None):
     """
     Plot comparison between pretrained and randomly initialized network performance.
     
@@ -192,7 +146,7 @@ def plot_neural_net_comparison(x_values, pretrained_errors, random_errors,
     return saved_files
 
 #===============================================================================
-# Image Visualization Functions
+# Visualization Functions
 #===============================================================================
 
 def display_binary_images(images, n_cols=10, figsize=(10, 10), titles=None, save_path=None):
@@ -246,11 +200,7 @@ def display_binary_images(images, n_cols=10, figsize=(10, 10), titles=None, save
     
     plt.show()
 
-#===============================================================================
-# Model-Specific Visualization Functions
-#===============================================================================
-
-def display_rbm_weights(rbm, figsize=(10, 10), n_cols=10, save_path=None):
+def display_weights(rbm, height=20, width=16, figsize=(10, 10), n_cols=10, save_path=None):
     """
     Plot the RBM weights as images.
     
@@ -258,6 +208,10 @@ def display_rbm_weights(rbm, figsize=(10, 10), n_cols=10, save_path=None):
     -----------
     rbm: RBM
         A trained RBM model
+    height: int
+        Height of the weight images
+    width: int
+        Width of the weight images
     figsize: tuple
         Figure size
     n_cols: int
@@ -270,27 +224,6 @@ def display_rbm_weights(rbm, figsize=(10, 10), n_cols=10, save_path=None):
     fig: matplotlib Figure object
         The created figure (for further manipulation if needed)
     """
-    n_vis = rbm.W.shape[0]
-    
-    # Find appropriate dimensions for visualization
-    if math.isqrt(n_vis) ** 2 == n_vis:
-        # Perfect square
-        side = math.isqrt(n_vis)
-        width, height = side, side
-        print(f"Weight dimension {n_vis} is a perfect square with side={side}")
-    else:
-        # Find factors for a rectangular shape
-        # Start with the square root and work backwards to find a divisor
-        sqrt_n = int(math.sqrt(n_vis))
-        
-        # Find the first divisor
-        for i in range(sqrt_n, 0, -1):
-            if n_vis % i == 0:
-                width, height = i, n_vis // i
-                break
-        
-        print(f"Weight dimension {n_vis} is not a perfect square. Using dimensions {width}x{height}")
-    
     fig, axs = plt.subplots(
         math.ceil(min(rbm.n_hidden, n_cols * n_cols) / n_cols),
         n_cols,
@@ -307,39 +240,6 @@ def display_rbm_weights(rbm, figsize=(10, 10), n_cols=10, save_path=None):
             ax.axis("off")
     
     plt.tight_layout()
-    
-    # Save figure if a path is provided
-    if save_path:
-        plt.savefig(save_path)
-        print(f"Figure saved to {save_path}")
-    
-    plt.show()
-    
-    return fig  # Return the figure object for further manipulation
-
-def plot_dbn_pretraining_errors(dbn, save_path=None):
-    """
-    Plot pretraining errors for each layer of a DBN.
-    
-    Parameters:
-    -----------
-    dbn: DBN
-        A trained DBN model with pretrain_errors attribute
-    save_path: str, optional
-        Path to save the figure
-            
-    Returns:
-    --------
-    fig: matplotlib Figure object
-        The created figure (for further manipulation if needed)
-    """
-    fig = plt.figure(figsize=(10, 6))
-    for i, errors in enumerate(dbn.pretrain_errors):
-        plt.plot(errors, label=f'Layer {i+1}')
-    plt.title("Pretraining errors by layer")
-    plt.xlabel("Epoch")
-    plt.ylabel("Reconstruction Error")
-    plt.legend()
     
     # Save figure if a path is provided
     if save_path:

@@ -4,8 +4,8 @@ import pickle
 from models import DBN
 from utils import (load_binary_alphadigits,
                    display_binary_images,
-                   plot_rbm_weights,
-                   plot_dbn_pretraining_errors)
+                   display_weights,
+                   plot_losses)
 
 # Create directories for saving results if they don't exist
 os.makedirs("results/plots", exist_ok=True)
@@ -72,13 +72,17 @@ display_binary_images(all_images, n_cols=10, figsize=(15, 5), titles=titles, sav
 # Plot pretraining errors
 print("Plotting pretraining errors:")
 if hasattr(dbn, 'pretrain_errors') and dbn.pretrain_errors:
-    plot_dbn_pretraining_errors(dbn, save_path="results/plots/dbn_pretraining_errors.png")
+    plot_losses(dbn.pretrain_errors, 
+               title="Pretraining errors by layer",
+               xlabel="Epoch",
+               ylabel="Reconstruction Error",
+               save_path="results/plots/dbn_pretraining_errors.png")
 
 # Plot weights for each RBM layer in the DBN
 print("Plotting DBN weights for each layer:")
 for i, rbm in enumerate(dbn.rbms):
     print(f"Plotting weights for layer {i+1}/{len(dbn.rbms)}...")
-    display_rbm_weights(rbm, figsize=(10, 10), n_cols=10, 
+    display_weights(rbm, height=20, width=16, figsize=(10, 10), n_cols=10, 
                     save_path=f"results/plots/dbn_layer{i+1}_weights.png")
 
 print("DBN training and visualization complete!")

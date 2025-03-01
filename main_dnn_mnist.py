@@ -5,7 +5,7 @@ from joblib import Parallel, delayed
 from models import DNN, DBN
 from utils import (load_mnist,
                    one_hot_encode,
-                   plot_neural_net_comparison,
+                   plot_comparison,
                    display_binary_images)
 
 # Create directories for saving results if they don't exist
@@ -161,8 +161,8 @@ def compare_layer_count(X_train, y_train_onehot, X_test, y_test_onehot,
     pretrained_errors = [res[0] for res in results]
     random_errors = [res[1] for res in results]
     
-    # Use the unified plot function
-    plot_neural_net_comparison(
+    # Use the renamed plot function
+    plot_comparison(
         layer_counts, 
         pretrained_errors, 
         random_errors,
@@ -232,8 +232,8 @@ def compare_neuron_count(X_train, y_train_onehot, X_test, y_test_onehot,
     pretrained_errors = [res[0] for res in results]
     random_errors = [res[1] for res in results]
     
-    # Use the unified plot function
-    plot_neural_net_comparison(
+    # Use the renamed plot function
+    plot_comparison(
         neuron_counts, 
         pretrained_errors, 
         random_errors,
@@ -314,8 +314,8 @@ def compare_training_size(X_train, y_train, y_train_onehot, X_test, y_test_oneho
     pretrained_errors = [res[0] for res in results]
     random_errors = [res[1] for res in results]
     
-    # Use the unified plot function
-    plot_neural_net_comparison(
+    # Use the renamed plot function
+    plot_comparison(
         sample_sizes, 
         pretrained_errors, 
         random_errors,

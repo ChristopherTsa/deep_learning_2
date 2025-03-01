@@ -4,8 +4,8 @@ import pickle
 from models import RBM
 from utils import (load_binary_alphadigits,
                    display_binary_images,
-                   plot_loss_curve,
-                   display_rbm_weights)
+                   display_weights,
+                   plot_losses)
 
 # Create directories for saving results if they don't exist
 os.makedirs("results/plots", exist_ok=True)
@@ -87,14 +87,14 @@ display_binary_images(all_images, n_cols=10, figsize=(15, 5),
 
 # Plot weights
 print("Plotting RBM weights:")
-display_rbm_weights(rbm, figsize=(10, 10), n_cols=10,
+display_weights(rbm, height=img_height, width=img_width, figsize=(10, 10), n_cols=10,
                 save_path="results/plots/rbm_weights.png")
 
 # Plot reconstruction error during training
 print("Plotting reconstruction error:")
-plot_loss_curve(rbm.losses, 
-               title='RBM Reconstruction Error',
-               ylabel='Mean Squared Error',
-               save_path="results/plots/rbm_reconstruction_error.png")
+plot_losses(rbm.losses, 
+           title='RBM Reconstruction Error',
+           ylabel='Mean Squared Error',
+           save_path="results/plots/rbm_reconstruction_error.png")
 
 print("RBM training and visualization complete!")
