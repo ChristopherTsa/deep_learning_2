@@ -1,57 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-def display_weight_matrices(weights, shape=(28, 28), n_samples=100, n_cols=10):
-    """Display the weight matrices as images."""
-    n_samples = min(n_samples, weights.shape[0])
-    n_rows = (n_samples - 1) // n_cols + 1
-    
-    fig, axes = plt.subplots(n_rows, n_cols, figsize=(n_cols, n_rows))
-    axes = axes.flatten()
-    
-    for i in range(n_samples):
-        weights_img = weights[i, :].reshape(shape)
-        axes[i].imshow(weights_img, cmap='gray')
-        axes[i].axis('off')
-    
-    for i in range(n_samples, len(axes)):
-        axes[i].axis('off')
-    
-    plt.tight_layout()
-    plt.show()
-
-def display_reconstructions(original, reconstructed, n_samples=10):
-    """Display original and reconstructed images side by side."""
-    n_samples = min(n_samples, original.shape[0])
-    
-    fig, axes = plt.subplots(2, n_samples, figsize=(n_samples, 2))
-    
-    for i in range(n_samples):
-        # Determine shape based on input size
-        if original[i].size == 784:  # MNIST
-            shape = (28, 28)
-        elif original[i].size == 320:  # AlphaDigits
-            shape = (20, 16)
-        else:
-            side = int(np.sqrt(original[i].size))
-            shape = (side, side)
-            
-        # Display original
-        axes[0, i].imshow(original[i].reshape(shape), cmap='binary')
-        axes[0, i].axis('off')
-        if i == 0:
-            axes[0, i].set_title('Original')
-            
-        # Display reconstruction
-        axes[1, i].imshow(reconstructed[i].reshape(shape), cmap='binary')
-        axes[1, i].axis('off')
-        if i == 0:
-            axes[1, i].set_title('Reconstructed')
-    
-    plt.tight_layout()
-    plt.show()
-
-def plot_loss_curve(losses, title="Training Loss", xlabel="Epoch", ylabel="Loss"):
+def plot_loss_curve(losses, title="Training Loss", xlabel="Epoch", ylabel="Loss", save_path=None):
     """Plot a single loss curve."""
     plt.figure(figsize=(10, 6))
     plt.plot(losses)
@@ -59,9 +9,15 @@ def plot_loss_curve(losses, title="Training Loss", xlabel="Epoch", ylabel="Loss"
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
     plt.grid(True)
+    
+    # Save figure if a path is provided
+    if save_path:
+        plt.savefig(save_path)
+        print(f"Figure saved to {save_path}")
+        
     plt.show()
 
-def plot_multiple_curves(curves_dict, title="Loss Comparison", xlabel="Epoch", ylabel="Loss"):
+def plot_multiple_curves(curves_dict, title="Loss Comparison", xlabel="Epoch", ylabel="Loss", save_path=None):
     """
     Plot multiple curves on the same graph.
     
@@ -69,6 +25,8 @@ def plot_multiple_curves(curves_dict, title="Loss Comparison", xlabel="Epoch", y
     -----------
     curves_dict: dict
         Dictionary mapping curve names to y-values
+    save_path: str, optional
+        Path to save the figure
     """
     plt.figure(figsize=(12, 7))
     
@@ -80,24 +38,16 @@ def plot_multiple_curves(curves_dict, title="Loss Comparison", xlabel="Epoch", y
     plt.ylabel(ylabel)
     plt.grid(True)
     plt.legend()
-    plt.show()
-
-def visualize_hidden_activations(activations, n_cols=10):
-    """Visualize hidden layer activations."""
-    n_samples = activations.shape[0]
-    n_units = activations.shape[1]
     
-    plt.figure(figsize=(12, 8))
-    plt.imshow(activations.T, aspect='auto', cmap='viridis')
-    plt.colorbar(label='Activation')
-    plt.xlabel('Sample')
-    plt.ylabel('Hidden Unit')
-    plt.title(f'Hidden Layer Activations ({n_samples} samples, {n_units} units)')
-    plt.tight_layout()
+    # Save figure if a path is provided
+    if save_path:
+        plt.savefig(save_path)
+        print(f"Figure saved to {save_path}")
+        
     plt.show()
 
 def plot_performance_comparison(x_values, pretrained_errors, random_errors, 
-                              xlabel, ylabel, title):
+                              xlabel, ylabel, title, save_path=None):
     """
     Plot comparison between pretrained and randomly initialized network performance.
     
@@ -115,6 +65,8 @@ def plot_performance_comparison(x_values, pretrained_errors, random_errors,
         Y-axis label
     title: str
         Plot title
+    save_path: str, optional
+        Path to save the figure
     """
     plt.figure(figsize=(12, 8))
     
@@ -135,31 +87,65 @@ def plot_performance_comparison(x_values, pretrained_errors, random_errors,
                      xytext=(0,-15), ha='center')
     
     plt.tight_layout()
-    plt.savefig(f"{title.replace(' ', '_')}.png")
+    
+    # Use provided save_path or default based on title
+    if save_path:
+        plt.savefig(save_path)
+        print(f"Figure saved to {save_path}")
+    elif title:
+        file_path = f"{title.replace(' ', '_')}.png"
+        plt.savefig(file_path)
+        print(f"Figure saved to {file_path}")
+    
     plt.show()
 
-def plot_learning_curves(histories, labels, title="Learning Curves"):
+def display_binary_images(images, n_cols=10, figsize=(10, 10), titles=None, save_path=None):
     """
-    Plot learning curves from training histories.
+    Display binary images in a grid.
     
     Parameters:
     -----------
-    histories: list of lists
-        List of training histories, each containing loss values
-    labels: list
-        List of labels for each history
-    title: str
-        Plot title
+    images: array-like
+        Binary images with shape (n_samples, height*width)
+    n_cols: int
+        Number of columns in the grid
+    figsize: tuple
+        Figure size
+    titles: list or None
+        Titles for each image
+    save_path: str, optional
+        Path to save the figure
     """
-    plt.figure(figsize=(12, 8))
+    n_images = len(images)
+    n_rows = (n_images - 1) // n_cols + 1
     
-    for history, label in zip(histories, labels):
-        plt.plot(history, label=label)
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=figsize)
+    axes = axes.flatten()
     
-    plt.xlabel('Epoch')
-    plt.ylabel('Loss')
-    plt.title(title)
-    plt.grid(True)
-    plt.legend()
+    for i in range(n_images):
+        # For AlphaDigits dataset, images are 20x16
+        if images[i].size == 320:  # 20*16 = 320
+            img = images[i].reshape(20, 16)
+        elif images[i].size == 784:  # 28*28 = 784 (MNIST)
+            img = images[i].reshape(28, 28)
+        else:
+            # Try to make a square image
+            side = int(np.sqrt(images[i].size))
+            img = images[i].reshape(side, -1)
+            
+        axes[i].imshow(img, cmap='binary')
+        axes[i].axis('off')
+        if titles is not None and i < len(titles):
+            axes[i].set_title(titles[i])
+            
+    for i in range(n_images, len(axes)):
+        axes[i].axis('off')
+        
     plt.tight_layout()
+    
+    # Save figure if a path is provided
+    if save_path:
+        plt.savefig(save_path)
+        print(f"Figure saved to {save_path}")
+    
     plt.show()

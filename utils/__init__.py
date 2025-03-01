@@ -1,25 +1,15 @@
-from .data_utils import load_mnist, create_synthetic_data, one_hot_encode, load_binary_alphadigits, display_binary_images
+from .data_utils import load_mnist, one_hot_encode, load_binary_alphadigits
 from .visualization import (
-    display_weight_matrices,
-    display_reconstructions,
-    plot_loss_curve,
-    plot_multiple_curves,
-    visualize_hidden_activations,
-    plot_performance_comparison,
-    plot_learning_curves
+    plot_loss_curve, plot_multiple_curves, plot_performance_comparison,
+    display_binary_images
 )
 
 __all__ = [
     'load_mnist',
-    'create_synthetic_data',
     'one_hot_encode',
     'load_binary_alphadigits',
     'display_binary_images',
-    'display_weight_matrices',
-    'display_reconstructions',
     'plot_loss_curve',
     'plot_multiple_curves',
-    'visualize_hidden_activations',
-    'plot_performance_comparison',
-    'plot_learning_curves'
+    'plot_performance_comparison'
 ]

@@ -244,8 +244,24 @@ class RBM:
             
         return p_v
     
-    def plot_weights(self, figsize=(10, 10), n_cols=10):
-        """Plot the RBM weights as images."""
+    def plot_weights(self, figsize=(10, 10), n_cols=10, save_path=None):
+        """
+        Plot the RBM weights as images.
+        
+        Parameters:
+        -----------
+        figsize: tuple
+            Figure size
+        n_cols: int
+            Number of columns in the grid
+        save_path: str, optional
+            Path to save the figure
+            
+        Returns:
+        --------
+        fig: matplotlib Figure object
+            The created figure (for further manipulation if needed)
+        """
         import matplotlib.pyplot as plt
         import numpy as np
         import math
@@ -287,7 +303,15 @@ class RBM:
                 ax.axis("off")
         
         plt.tight_layout()
+        
+        # Save figure if a path is provided
+        if save_path:
+            plt.savefig(save_path)
+            print(f"Figure saved to {save_path}")
+        
         plt.show()
+        
+        return fig  # Return the figure object for further manipulation
 
 
 class PersistentRBM(RBM):

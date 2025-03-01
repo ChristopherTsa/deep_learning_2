@@ -47,34 +47,6 @@ def load_mnist(binarize_threshold=0.5, normalize=True):
     print(f"MNIST loaded: {X_train.shape[0]} training and {X_test.shape[0]} test samples")
     return X_train, y_train, X_test, y_test
 
-def create_synthetic_data(n_samples=1000, n_features=10, pattern_prob=(0.8, 0.2)):
-    """
-    Create synthetic correlated binary data.
-    
-    Parameters:
-    -----------
-    n_samples: int
-        Number of samples
-    n_features: int
-        Number of features (must be even)
-    pattern_prob: tuple
-        Probabilities for the first half and second half of features
-        
-    Returns:
-    --------
-    array-like
-        Synthetic binary data
-    """
-    if n_features % 2 != 0:
-        raise ValueError("n_features must be even")
-        
-    half = n_features // 2
-    data = np.zeros((n_samples, n_features))
-    data[:, :half] = np.random.binomial(1, pattern_prob[0], (n_samples, half))
-    data[:, half:] = np.random.binomial(1, pattern_prob[1], (n_samples, half))
-    
-    return data
-
 def one_hot_encode(y):
     """
     One-hot encode labels.
@@ -108,7 +80,7 @@ def load_binary_alphadigits(chars=None):
         Binary images with shape (n_samples, 20*16)
     """
     try:
-        mat = sio.loadmat('/Users/christopher/Library/CloudStorage/OneDrive-ENSTAParis/ENSTA/3A/Deep Learning II/project/data/binaryalphadigs.mat')
+        mat = sio.loadmat('/Users/christopher/Library/CloudStorage/OneDrive-ENSTAParis/ENSTA/3A/Deep Learning II/deep_learning_2/data/binaryalphadigs.mat')
         digits = mat['dat']
         
         if chars is None:
@@ -127,46 +99,3 @@ def load_binary_alphadigits(chars=None):
         print("Please download it from https://www.kaggle.com/datasets/angevalli/binary-alpha-digits")
         print("and place it in /Users/christopher/Library/CloudStorage/OneDrive-ENSTAParis/ENSTA/3A/Deep Learning II/project/data/")
         return None
-
-def display_binary_images(images, n_cols=10, figsize=(10, 10), titles=None):
-    """
-    Display binary images in a grid.
-    
-    Parameters:
-    -----------
-    images: array-like
-        Binary images with shape (n_samples, height*width)
-    n_cols: int
-        Number of columns in the grid
-    figsize: tuple
-        Figure size
-    titles: list or None
-        Titles for each image
-    """
-    n_images = len(images)
-    n_rows = (n_images - 1) // n_cols + 1
-    
-    fig, axes = plt.subplots(n_rows, n_cols, figsize=figsize)
-    axes = axes.flatten()
-    
-    for i in range(n_images):
-        # For AlphaDigits dataset, images are 20x16
-        if images[i].size == 320:  # 20*16 = 320
-            img = images[i].reshape(20, 16)
-        elif images[i].size == 784:  # 28*28 = 784 (MNIST)
-            img = images[i].reshape(28, 28)
-        else:
-            # Try to make a square image
-            side = int(np.sqrt(images[i].size))
-            img = images[i].reshape(side, -1)
-            
-        axes[i].imshow(img, cmap='binary')
-        axes[i].axis('off')
-        if titles is not None and i < len(titles):
-            axes[i].set_title(titles[i])
-            
-    for i in range(n_images, len(axes)):
-        axes[i].axis('off')
-        
-    plt.tight_layout()
-    plt.show()

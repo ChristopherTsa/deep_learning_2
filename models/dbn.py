@@ -124,16 +124,36 @@ class DBN:
         reconstructions = self.predict(X)
         return np.mean((X - reconstructions) ** 2)
     
-    def plot_pretraining_errors(self):
-        """Plot pretraining errors for each layer."""
-        plt.figure(figsize=(10, 6))
+    def plot_pretraining_errors(self, save_path=None):
+        """
+        Plot pretraining errors for each layer.
+        
+        Parameters:
+        -----------
+        save_path: str, optional
+            Path to save the figure
+            
+        Returns:
+        --------
+        fig: matplotlib Figure object
+            The created figure (for further manipulation if needed)
+        """
+        fig = plt.figure(figsize=(10, 6))
         for i, errors in enumerate(self.pretrain_errors):
             plt.plot(errors, label=f'Layer {i+1}')
         plt.title("Pretraining errors by layer")
         plt.xlabel("Epoch")
         plt.ylabel("Reconstruction Error")
         plt.legend()
+        
+        # Save figure if a path is provided
+        if save_path:
+            plt.savefig(save_path)
+            print(f"Figure saved to {save_path}")
+        
         plt.show()
+        
+        return fig  # Return the figure object for further manipulation
 
     def sample(self, n_samples=10, gibbs_steps=1000):
         """
