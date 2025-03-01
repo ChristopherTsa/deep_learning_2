@@ -58,8 +58,10 @@ def plot_losses(losses, title="Training Loss", xlabel="Epoch", ylabel="Loss",
     
     return fig
 
-def plot_comparison(x_values, pretrained_errors, random_errors, 
-                   xlabel, ylabel, title, dual_plot=True, save_path=None):
+def plot_comparison(x_values, pretrained_test_errors, random_test_errors, 
+                   pretrained_train_errors=None, random_train_errors=None,
+                   xlabel="", ylabel="", title="", legend_labels=None, 
+                   dual_plot=True, save_path=None):
     """
     Plot comparison between pretrained and randomly initialized network performance.
     
@@ -67,16 +69,22 @@ def plot_comparison(x_values, pretrained_errors, random_errors,
     -----------
     x_values: list
         X-axis values (e.g., number of layers, neurons, or training samples)
-    pretrained_errors: list
-        Error rates for pretrained networks
-    random_errors: list
-        Error rates for randomly initialized networks
+    pretrained_test_errors: list
+        Test error rates for pretrained networks
+    random_test_errors: list
+        Test error rates for randomly initialized networks
+    pretrained_train_errors: list, optional
+        Train error rates for pretrained networks
+    random_train_errors: list, optional
+        Train error rates for randomly initialized networks
     xlabel: str
         X-axis label
     ylabel: str
         Y-axis label
     title: str
         Plot title
+    legend_labels: list, optional
+        Custom labels for the legend
     dual_plot: bool, default=True
         If True, generates both a line plot and a bar plot comparison
         If False, generates only the line plot
@@ -93,13 +101,24 @@ def plot_comparison(x_values, pretrained_errors, random_errors,
     # Create the line plot
     plt.figure(figsize=(12, 7))
     
-    curves_dict = {
-        'Pre-trained': pretrained_errors,
-        'Random initialization': random_errors
-    }
+    # Use consistent colors for each initialization method
+    pretrained_color = 'blue'
+    random_color = 'red'
     
-    for name, values in curves_dict.items():
-        plt.plot(x_values, values, marker='o', label=name)
+    # Plot test errors with solid lines
+    plt.plot(x_values, pretrained_test_errors, color=pretrained_color, marker='o', linestyle='-', 
+             label=legend_labels[0] if legend_labels else 'Pre-trained (Test)')
+    plt.plot(x_values, random_test_errors, color=random_color, marker='s', linestyle='-', 
+             label=legend_labels[1] if legend_labels else 'Random Init (Test)')
+    
+    # Plot train errors with dashed lines (if provided)
+    if pretrained_train_errors is not None:
+        plt.plot(x_values, pretrained_train_errors, color=pretrained_color, marker='o', linestyle='--', 
+                 label=legend_labels[2] if legend_labels and len(legend_labels) > 2 else 'Pre-trained (Train)')
+    
+    if random_train_errors is not None:
+        plt.plot(x_values, random_train_errors, color=random_color, marker='s', linestyle='--', 
+                 label=legend_labels[3] if legend_labels and len(legend_labels) > 3 else 'Random Init (Train)')
     
     plt.title(f"{title} (Line Plot)")
     plt.xlabel(xlabel)
@@ -118,8 +137,20 @@ def plot_comparison(x_values, pretrained_errors, random_errors,
     if dual_plot:
         plt.figure(figsize=(12, 8))
         
-        plt.plot(x_values, pretrained_errors, 'b-o', label='Pre-trained Network')
-        plt.plot(x_values, random_errors, 'r-s', label='Random Initialization')
+        # Plot test errors
+        plt.plot(x_values, pretrained_test_errors, color=pretrained_color, linestyle='-', marker='o', 
+                 label=legend_labels[0] if legend_labels else 'Pre-trained (Test)')
+        plt.plot(x_values, random_test_errors, color=random_color, linestyle='-', marker='s', 
+                 label=legend_labels[1] if legend_labels else 'Random Init (Test)')
+        
+        # Plot train errors if provided
+        if pretrained_train_errors is not None:
+            plt.plot(x_values, pretrained_train_errors, color=pretrained_color, linestyle='--', marker='o', 
+                     label=legend_labels[2] if legend_labels and len(legend_labels) > 2 else 'Pre-trained (Train)')
+        
+        if random_train_errors is not None:
+            plt.plot(x_values, random_train_errors, color=random_color, linestyle='--', marker='s', 
+                     label=legend_labels[3] if legend_labels and len(legend_labels) > 3 else 'Random Init (Train)')
         
         plt.xlabel(xlabel)
         plt.ylabel(ylabel)
@@ -127,19 +158,27 @@ def plot_comparison(x_values, pretrained_errors, random_errors,
         plt.grid(True)
         plt.legend()
         
-        # Add data value labels
-        for i, (x, y1, y2) in enumerate(zip(x_values, pretrained_errors, random_errors)):
+        # Add data value labels for test errors
+        for i, (x, y1, y2) in enumerate(zip(x_values, pretrained_test_errors, random_test_errors)):
             plt.annotate(f'{y1:.4f}', (x, y1), textcoords="offset points", 
                         xytext=(0,10), ha='center')
             plt.annotate(f'{y2:.4f}', (x, y2), textcoords="offset points", 
                         xytext=(0,-15), ha='center')
         
+        # Add data value labels for train errors (if provided)
+        if pretrained_train_errors is not None and random_train_errors is not None:
+            for i, (x, y1, y2) in enumerate(zip(x_values, pretrained_train_errors, random_train_errors)):
+                plt.annotate(f'{y1:.4f}', (x, y1), textcoords="offset points", 
+                            xytext=(0,10), ha='center')
+                plt.annotate(f'{y2:.4f}', (x, y2), textcoords="offset points", 
+                            xytext=(0,-15), ha='center')
+        
         plt.tight_layout()
         
-        # Save bar plot
-        bar_plot_path = f"{save_path}_detail.png" if save_path else f"{title.replace(' ', '_')}_detail.png"
-        plt.savefig(bar_plot_path)
-        saved_files['detail_plot'] = bar_plot_path
+        # Save detail plot
+        detail_plot_path = f"{save_path}_detail.png" if save_path else f"{title.replace(' ', '_')}_detail.png"
+        plt.savefig(detail_plot_path)
+        saved_files['detail_plot'] = detail_plot_path
         plt.show()
     
     print(f"Plots for {title} saved successfully.")

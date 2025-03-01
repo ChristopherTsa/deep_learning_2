@@ -1,0 +1,9 @@
+alpha
+- generate good samples
+- comparison of hyperparameters
+- limits of models
+
+mnist
+- experiments
+- score
+- optimal
