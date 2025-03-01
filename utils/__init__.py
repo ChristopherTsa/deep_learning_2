@@ -2,10 +2,7 @@
 from .data_utils import (
     # Dataset loading functions
     load_mnist,
-    load_binary_alphadigits,
-    
-    # Data preprocessing functions
-    one_hot_encode
+    load_binary_alphadigits
 )
 
 # Visualization functions
@@ -23,9 +20,6 @@ __all__ = [
     # Dataset loading functions
     'load_mnist',
     'load_binary_alphadigits',
-    
-    # Data preprocessing functions
-    'one_hot_encode',
     
     # Plotting functions
     'plot_losses',

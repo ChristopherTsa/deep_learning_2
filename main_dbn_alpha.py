@@ -53,6 +53,9 @@ with open(model_path, 'wb') as f:
 print("Generating samples from the trained DBN...")
 samples = dbn.predict(np.random.binomial(1, 0.5, (10, layer_sizes[0])))
 
+# Convert generated samples to binary (black and white) instead of grayscale
+samples = np.round(samples).astype(int)
+
 # Display generated samples
 print("Displaying generated samples:")
 display_binary_images(samples, n_cols=5, figsize=(10, 5), titles=[f"Generated {i}" for i in range(10)], save_path="results/plots/dbn_generated_samples.png")
@@ -82,10 +85,26 @@ if hasattr(dbn, 'pretrain_errors') and dbn.pretrain_errors:
                save_path="results/plots/dbn_pretraining_errors.png")
 
 # Plot weights for each RBM layer in the DBN
-print("Plotting DBN weights for each layer:")
+print("Displaying DBN weights for each layer:")
 for i, rbm in enumerate(dbn.rbms):
     print(f"Plotting weights for layer {i+1}/{len(dbn.rbms)}...")
-    display_weights(rbm, height=20, width=16, figsize=(10, 10), n_cols=10, 
+    
+    # For first layer: use original image dimensions
+    if i == 0:
+        height, width = 20, 16
+    else:
+        # For subsequent layers: calculate appropriate dimensions based on the previous layer size
+        # Try to find a reasonable aspect ratio
+        prev_layer_size = layer_sizes[i]
+        # Find factors close to a square
+        factors = []
+        for j in range(1, int(np.sqrt(prev_layer_size)) + 1):
+            if prev_layer_size % j == 0:
+                factors.append((j, prev_layer_size // j))
+        # Choose the factor pair with ratio closest to 1 (most square-like)
+        height, width = min(factors, key=lambda x: abs(x[0]/x[1] - 1))
+    
+    display_weights(rbm, height=height, width=width, figsize=(10, 10), n_cols=10, 
                     save_path=f"results/plots/dbn_layer{i+1}_weights.png")
 
 print("DBN training and visualization complete!")

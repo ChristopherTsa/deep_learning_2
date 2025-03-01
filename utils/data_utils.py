@@ -2,7 +2,6 @@ import numpy as np
 from sklearn.datasets import fetch_openml
 from sklearn.preprocessing import Binarizer, OneHotEncoder
 import scipy.io as sio
-import matplotlib.pyplot as plt
 import os
 import pickle
 
@@ -48,7 +47,7 @@ def load_binary_alphadigits(chars=None):
 
 def load_mnist(binarize_threshold=0.5, normalize=True, use_cache=True):
     """
-    Load MNIST dataset with optional caching.
+    Load MNIST dataset with optional caching. Labels are always one-hot encoded.
     
     Parameters:
     -----------
@@ -64,11 +63,11 @@ def load_mnist(binarize_threshold=0.5, normalize=True, use_cache=True):
     X_train: array-like
         Training images
     y_train: array-like
-        Training labels
+        Training labels (one-hot encoded)
     X_test: array-like
         Test images
     y_test: array-like
-        Test labels
+        Test labels (one-hot encoded)
     """
     mnist_path = "data/mnist.pkl"
     
@@ -80,7 +79,7 @@ def load_mnist(binarize_threshold=0.5, normalize=True, use_cache=True):
         print("Loading MNIST dataset from disk cache...")
         with open(mnist_path, 'rb') as f:
             data = pickle.load(f)
-            return data['X_train'], data['y_train'], data['X_test'], data['y_test']
+            return data['X_train'], data['y_train_onehot'], data['X_test'], data['y_test_onehot']
     
     # Otherwise download the dataset
     print("Downloading MNIST dataset...")
@@ -102,38 +101,24 @@ def load_mnist(binarize_threshold=0.5, normalize=True, use_cache=True):
     X_train, X_test = X[:60000], X[60000:]
     y_train, y_test = y[:60000], y[60000:]
     
+    # Always one-hot encode the labels
+    encoder = OneHotEncoder(sparse_output=False)
+    y_train_onehot = encoder.fit_transform(y_train.reshape(-1, 1))
+    y_test_onehot = encoder.transform(y_test.reshape(-1, 1))
+    
     # Save to cache if requested
     if use_cache:
         print("Saving MNIST dataset to disk for future use...")
         data = {
             'X_train': X_train,
-            'y_train': y_train,
+            'y_train': y_train,  # Save original labels
+            'y_train_onehot': y_train_onehot,  # Save one-hot encoded labels
             'X_test': X_test,
-            'y_test': y_test
+            'y_test': y_test,  # Save original labels
+            'y_test_onehot': y_test_onehot  # Save one-hot encoded labels
         }
         with open(mnist_path, 'wb') as f:
             pickle.dump(data, f)
     
     print(f"MNIST loaded: {X_train.shape[0]} training and {X_test.shape[0]} test samples")
-    return X_train, y_train, X_test, y_test
-
-#===============================================================================
-# Data Preprocessing Functions
-#===============================================================================
-
-def one_hot_encode(y):
-    """
-    One-hot encode labels.
-    
-    Parameters:
-    -----------
-    y: array-like
-        Labels
-        
-    Returns:
-    --------
-    array-like
-        One-hot encoded labels
-    """
-    encoder = OneHotEncoder(sparse_output=False)
-    return encoder.fit_transform(y.reshape(-1, 1))
+    return X_train, y_train_onehot, X_test, y_test_onehot

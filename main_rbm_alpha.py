@@ -29,12 +29,6 @@ if data is None:
 
 print(f"Loaded {data.shape[0]} samples with dimension {data.shape[1]}")
 
-# Determine original image dimensions (assuming square images)
-# For alphadigits, this is typically 20x16 pixels
-img_height = 20  # Update these values based on your actual dataset
-img_width = 16
-print(f"Original image dimensions: {img_height}x{img_width}")
-
 # Display some random original samples
 print("Displaying original samples:")
 random_indices = np.random.choice(len(data), size=10, replace=False)
@@ -59,11 +53,13 @@ with open(model_path, 'wb') as f:
 print("Generating samples from the trained RBM...")
 samples = rbm.generate_samples(n_samples=10, gibbs_steps=1000)
 
+# Convert generated samples to binary (black and white) instead of grayscale
+samples = np.round(samples).astype(int)
+
 # Display generated samples - reshape to original dimensions
 print("Displaying generated samples:")
 # Reshape samples to original dimensions if needed
-samples_2d = [sample.reshape(img_height, img_width) for sample in samples]
-display_binary_images(samples_2d, n_cols=5, figsize=(10, 5), 
+display_binary_images(samples, n_cols=5, figsize=(10, 5), 
                      titles=[f"Generated {i}" for i in range(10)],
                      save_path="results/plots/rbm_generated_samples.png")
 
@@ -76,21 +72,17 @@ reconstructions = rbm.reconstruct(samples_to_reconstruct)
 # Convert reconstructions to binary (black and white) instead of grayscale
 reconstructions = np.round(reconstructions).astype(int)
 
-# Reshape reconstructions to original dimensions
-reconstructions_2d = [recon.reshape(img_height, img_width) for recon in reconstructions]
-original_2d = [orig.reshape(img_height, img_width) for orig in samples_to_reconstruct]
-
 # Display original and reconstructed samples side by side
 print("Displaying original and reconstructed samples:")
-all_images = original_2d + reconstructions_2d  # List concatenation
+all_images = np.vstack([samples_to_reconstruct, reconstructions])
 titles = [f"Original {i}" for i in range(10)] + [f"Reconstructed {i}" for i in range(10)]
 display_binary_images(all_images, n_cols=10, figsize=(15, 5), 
                      titles=titles,
                      save_path="results/plots/rbm_reconstructions.png")
 
 # Plot weights
-print("Plotting RBM weights:")
-display_weights(rbm, height=img_height, width=img_width, figsize=(10, 10), n_cols=10,
+print("Displaying RBM weights:")
+display_weights(rbm, height=20, width=16, figsize=(10, 10), n_cols=10,
                 save_path="results/plots/rbm_weights.png")
 
 # Plot reconstruction error during training
