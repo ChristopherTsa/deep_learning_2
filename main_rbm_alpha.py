@@ -2,8 +2,10 @@ import numpy as np
 import os
 import pickle
 from models import RBM
-from utils import (load_binary_alphadigits, display_binary_images, 
-                  plot_loss_curve)
+from utils import (load_binary_alphadigits,
+                   display_binary_images,
+                   plot_loss_curve,
+                   display_rbm_weights)
 
 # Create directories for saving results if they don't exist
 os.makedirs("results/plots", exist_ok=True)
@@ -85,8 +87,7 @@ display_binary_images(all_images, n_cols=10, figsize=(15, 5),
 
 # Plot weights
 print("Plotting RBM weights:")
-# Assuming rbm.plot_weights has been updated with a save_path parameter
-rbm.plot_weights(figsize=(10, 10), n_cols=10, 
+display_rbm_weights(rbm, figsize=(10, 10), n_cols=10,
                 save_path="results/plots/rbm_weights.png")
 
 # Plot reconstruction error during training

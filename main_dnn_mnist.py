@@ -3,10 +3,10 @@ import os
 import pickle
 from joblib import Parallel, delayed
 from models import DNN, DBN
-from utils import (
-    load_mnist, one_hot_encode, plot_performance_comparison,
-    plot_multiple_curves, display_binary_images
-)
+from utils import (load_mnist,
+                   one_hot_encode,
+                   plot_neural_net_comparison,
+                   display_binary_images)
 
 # Create directories for saving results if they don't exist
 os.makedirs("results/plots", exist_ok=True)
@@ -161,22 +161,17 @@ def compare_layer_count(X_train, y_train_onehot, X_test, y_test_onehot,
     pretrained_errors = [res[0] for res in results]
     random_errors = [res[1] for res in results]
     
-    # Use the plot_multiple_curves function instead of direct plotting
-    curves_dict = {
-        'Pre-trained': pretrained_errors,
-        'Random initialization': random_errors
-    }
-    
-    plot_multiple_curves(
-        curves_dict,
-        title='Effect of Network Depth on Error Rate',
-        xlabel='Number of Hidden Layers',
-        ylabel='Test Error',
-        save_path="results/plots/layer_count_comparison.png"
+    # Use the unified plot function
+    plot_neural_net_comparison(
+        layer_counts, 
+        pretrained_errors, 
+        random_errors,
+        "Number of Hidden Layers", 
+        "Test Error",
+        "Effect of Network Depth on Error Rate",
+        save_path="results/plots/layer_count_comparison"
     )
     
-    print("Layer count comparison saved to results/plots/layer_count_comparison.png")
-            
     return layer_counts, pretrained_errors, random_errors
 
 def compare_neuron_count(X_train, y_train_onehot, X_test, y_test_onehot, 
@@ -237,22 +232,17 @@ def compare_neuron_count(X_train, y_train_onehot, X_test, y_test_onehot,
     pretrained_errors = [res[0] for res in results]
     random_errors = [res[1] for res in results]
     
-    # Use the plot_multiple_curves function instead of direct plotting
-    curves_dict = {
-        'Pre-trained': pretrained_errors,
-        'Random initialization': random_errors
-    }
-    
-    plot_multiple_curves(
-        curves_dict,
-        title='Effect of Layer Width on Error Rate',
-        xlabel='Number of Neurons per Layer',
-        ylabel='Test Error',
-        save_path="results/plots/neuron_count_comparison.png"
+    # Use the unified plot function
+    plot_neural_net_comparison(
+        neuron_counts, 
+        pretrained_errors, 
+        random_errors,
+        "Number of Neurons per Layer", 
+        "Test Error",
+        "Effect of Layer Width on Error Rate",
+        save_path="results/plots/neuron_count_comparison"
     )
     
-    print("Neuron count comparison saved to results/plots/neuron_count_comparison.png")
-            
     return neuron_counts, pretrained_errors, random_errors
 
 def compare_training_size(X_train, y_train, y_train_onehot, X_test, y_test_onehot,
@@ -324,22 +314,17 @@ def compare_training_size(X_train, y_train, y_train_onehot, X_test, y_test_oneho
     pretrained_errors = [res[0] for res in results]
     random_errors = [res[1] for res in results]
     
-    # Use the plot_multiple_curves function instead of direct plotting
-    curves_dict = {
-        'Pre-trained': pretrained_errors,
-        'Random initialization': random_errors
-    }
-    
-    plot_multiple_curves(
-        curves_dict,
-        title='Effect of Training Set Size on Error Rate',
-        xlabel='Training Set Size',
-        ylabel='Test Error',
-        save_path="results/plots/training_size_comparison.png"
+    # Use the unified plot function
+    plot_neural_net_comparison(
+        sample_sizes, 
+        pretrained_errors, 
+        random_errors,
+        "Training Set Size", 
+        "Test Error",
+        "Effect of Training Set Size on Error Rate",
+        save_path="results/plots/training_size_comparison"
     )
     
-    print("Training size comparison saved to results/plots/training_size_comparison.png")
-            
     return sample_sizes, pretrained_errors, random_errors
 
 def show_output_probabilities(dnn, X_test, y_test, num_samples=5):
@@ -384,36 +369,10 @@ def show_output_probabilities(dnn, X_test, y_test, num_samples=5):
         )
         print(f"Sample {i+1} prediction saved to results/plots/sample_{i+1}_pred.png")
 
-def load_or_download_mnist():
-    """Load MNIST dataset from disk if available, otherwise download it."""
-    mnist_path = "data/mnist.pkl"
-    
-    if os.path.exists(mnist_path):
-        print("Loading MNIST dataset from disk...")
-        with open(mnist_path, 'rb') as f:
-            data = pickle.load(f)
-            return data['X_train'], data['y_train'], data['X_test'], data['y_test']
-    else:
-        print("Downloading MNIST dataset...")
-        X_train, y_train, X_test, y_test = load_mnist(binarize_threshold=0.5, normalize=True)
-        
-        # Save to disk
-        print("Saving MNIST dataset to disk for future use...")
-        data = {
-            'X_train': X_train,
-            'y_train': y_train,
-            'X_test': X_test,
-            'y_test': y_test
-        }
-        with open(mnist_path, 'wb') as f:
-            pickle.dump(data, f)
-        
-        return X_train, y_train, X_test, y_test
-
 def run_experiments():
     """Run all experiments and generate plots."""
     print("Loading MNIST dataset...")
-    X_train, y_train, X_test, y_test = load_or_download_mnist()
+    X_train, y_train, X_test, y_test = load_mnist(binarize_threshold=0.5, normalize=True, use_cache=True)
     
     # Convert pandas Series to numpy arrays if necessary
     if hasattr(y_train, 'to_numpy'):
@@ -429,39 +388,15 @@ def run_experiments():
     layer_counts, pretrained_layer_errors, random_layer_errors = compare_layer_count(
         X_train, y_train_onehot, X_test, y_test_onehot)
     
-    plot_performance_comparison(
-        layer_counts, pretrained_layer_errors, random_layer_errors,
-        "Number of Hidden Layers", "Error Rate",
-        "Effect of Network Depth on Error Rate",
-        save_path="results/plots/layer_depth_comparison.png"
-    )
-    print("Network depth comparison plot saved to results/plots/layer_depth_comparison.png")
-    
     # Compare number of neurons per layer
     print("\n=== EXPERIMENT 2: COMPARING NUMBER OF NEURONS PER LAYER ===")
     neuron_counts, pretrained_neuron_errors, random_neuron_errors = compare_neuron_count(
         X_train, y_train_onehot, X_test, y_test_onehot)
     
-    plot_performance_comparison(
-        neuron_counts, pretrained_neuron_errors, random_neuron_errors,
-        "Number of Neurons per Layer", "Error Rate",
-        "Effect of Layer Width on Error Rate",
-        save_path="results/plots/layer_width_comparison.png"
-    )
-    print("Layer width comparison plot saved to results/plots/layer_width_comparison.png")
-    
     # Compare training set size
     print("\n=== EXPERIMENT 3: COMPARING TRAINING SET SIZE ===")
     sample_sizes, pretrained_size_errors, random_size_errors = compare_training_size(
         X_train, y_train, y_train_onehot, X_test, y_test_onehot)
-    
-    plot_performance_comparison(
-        sample_sizes, pretrained_size_errors, random_size_errors,
-        "Training Set Size", "Error Rate",
-        "Effect of Training Set Size on Error Rate",
-        save_path="results/plots/training_size_comparison.png"
-    )
-    print("Training size comparison plot saved to results/plots/training_size_comparison.png")
     
     # Find the best configuration and visualize output probabilities
     print("\n=== FINDING OPTIMAL CONFIGURATION ===")

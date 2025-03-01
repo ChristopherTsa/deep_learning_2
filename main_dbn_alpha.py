@@ -1,8 +1,11 @@
 import numpy as np
 import os
 import pickle
-from models.dbn import DBN
-from utils import load_binary_alphadigits, display_binary_images, plot_loss_curve
+from models import DBN
+from utils import (load_binary_alphadigits,
+                   display_binary_images,
+                   plot_rbm_weights,
+                   plot_dbn_pretraining_errors)
 
 # Create directories for saving results if they don't exist
 os.makedirs("results/plots", exist_ok=True)
@@ -68,34 +71,14 @@ display_binary_images(all_images, n_cols=10, figsize=(15, 5), titles=titles, sav
 
 # Plot pretraining errors
 print("Plotting pretraining errors:")
-# Assuming DBN class has a method to get pretraining errors
-# If the plot_pretraining_errors method returns a figure:
-if hasattr(dbn, 'plot_pretraining_errors'):
-    if hasattr(dbn, 'pretraining_errors'):
-        # Use our plot_loss_curve function instead
-        for i, errors in enumerate(dbn.pretraining_errors):
-            plot_loss_curve(
-                errors,
-                title=f'Layer {i+1} Pretraining Error',
-                xlabel='Epoch',
-                ylabel='Reconstruction Error',
-                save_path=f"results/plots/dbn_layer{i+1}_pretraining_error.png"
-            )
-    else:
-        # Fall back to the original method if needed
-        try:
-            fig_errors = dbn.plot_pretraining_errors()
-            if fig_errors:  # Checking if the method returns a figure
-                fig_errors.savefig("results/plots/dbn_pretraining_errors.png")
-                print("Pretraining errors plot saved to results/plots/dbn_pretraining_errors.png")
-        except Exception as e:
-            print(f"Could not plot pretraining errors: {e}")
+if hasattr(dbn, 'pretrain_errors') and dbn.pretrain_errors:
+    plot_dbn_pretraining_errors(dbn, save_path="results/plots/dbn_pretraining_errors.png")
 
 # Plot weights for each RBM layer in the DBN
 print("Plotting DBN weights for each layer:")
 for i, rbm in enumerate(dbn.rbms):
     print(f"Plotting weights for layer {i+1}/{len(dbn.rbms)}...")
-    rbm.plot_weights(figsize=(10, 10), n_cols=10, 
+    display_rbm_weights(rbm, figsize=(10, 10), n_cols=10, 
                     save_path=f"results/plots/dbn_layer{i+1}_weights.png")
 
 print("DBN training and visualization complete!")
