@@ -63,6 +63,9 @@ random_indices = np.random.choice(len(data), size=10, replace=False)
 samples_to_reconstruct = data[random_indices]
 reconstructions = dbn.predict(samples_to_reconstruct)
 
+# Convert reconstructions to binary (black and white) instead of grayscale
+reconstructions = np.round(reconstructions).astype(int)
+
 # Display original and reconstructed samples side by side
 print("Displaying original and reconstructed samples:")
 all_images = np.vstack([samples_to_reconstruct, reconstructions])

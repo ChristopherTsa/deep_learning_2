@@ -73,6 +73,9 @@ random_indices = np.random.choice(len(data), size=10, replace=False)
 samples_to_reconstruct = data[random_indices]
 reconstructions = rbm.reconstruct(samples_to_reconstruct)
 
+# Convert reconstructions to binary (black and white) instead of grayscale
+reconstructions = np.round(reconstructions).astype(int)
+
 # Reshape reconstructions to original dimensions
 reconstructions_2d = [recon.reshape(img_height, img_width) for recon in reconstructions]
 original_2d = [orig.reshape(img_height, img_width) for orig in samples_to_reconstruct]
