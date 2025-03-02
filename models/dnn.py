@@ -72,7 +72,7 @@ class DNN:
         activations.append(self.softmax(logits))
         return activations
 
-    def backward(self, activations, y_true, lr, reg_lambda=0.0):
+    def backward(self, activations, y_true, lr, reg_lambda=0.0, momentum=0.0):
         """
         Backward pass for gradient computation and weight updates.
         
@@ -86,6 +86,8 @@ class DNN:
             Learning rate
         reg_lambda: float
             L2 regularization parameter
+        momentum: float
+            Momentum coefficient for weight updates
         """
         deltas = [activations[-1] - y_true]
 
@@ -94,7 +96,12 @@ class DNN:
             delta = np.dot(deltas[0], self.weights[i].T) * activations[i] * (1 - activations[i])
             deltas.insert(0, delta)
 
-        # Update weights and biases
+        # Initialize velocity if not already done
+        if not hasattr(self, 'velocity_W'):
+            self.velocity_W = [np.zeros_like(w) for w in self.weights]
+            self.velocity_b = [np.zeros_like(b) for b in self.biases]
+
+        # Update weights and biases with momentum
         for i in range(len(self.weights)):
             grad_W = np.dot(activations[i].T, deltas[i]) / y_true.shape[0]
             grad_b = np.mean(deltas[i], axis=0)
@@ -102,12 +109,17 @@ class DNN:
             # Add L2 regularization penalty
             grad_W += reg_lambda * self.weights[i]
             
+            # Apply momentum
+            self.velocity_W[i] = momentum * self.velocity_W[i] - lr * grad_W
+            self.velocity_b[i] = momentum * self.velocity_b[i] - lr * grad_b
+            
             # Update weights and biases
-            self.weights[i] -= lr * grad_W
-            self.biases[i] -= lr * grad_b
+            self.weights[i] += self.velocity_W[i]
+            self.biases[i] += self.velocity_b[i]
 
     def fit(self, X_train, y_train, X_val=None, y_val=None, nb_epochs=10, batch_size=100,
-            lr=0.01, decay_rate=1.0, reg_lambda=0.0, verbose=True):
+            lr=0.01, decay_rate=1.0, reg_lambda=0.0, verbose=True, momentum=0.0,
+            early_stopping=False, patience=10, min_delta=0.001):
         """
         Train the neural network.
         
@@ -133,6 +145,14 @@ class DNN:
             L2 regularization parameter
         verbose: bool
             Whether to print progress
+        momentum: float
+            Momentum coefficient
+        early_stopping: bool
+            Whether to use early stopping
+        patience: int
+            Number of epochs to wait for improvement before stopping
+        min_delta: float
+            Minimum change to qualify as improvement
             
         Returns:
         --------
@@ -141,11 +161,17 @@ class DNN:
         """
         history = []
         initial_lr = lr
+        
+        # Early stopping variables
+        best_val_loss = float('inf')
+        wait = 0
+        best_weights = None
+        best_biases = None
+        
         for epoch in range(nb_epochs):
             
             # Apply learning rate decay
-            if epoch > 20:
-                lr = initial_lr * (decay_rate ** epoch)
+            current_lr = initial_lr * (decay_rate ** epoch)
             
             # Shuffle data
             indices = np.arange(X_train.shape[0])
@@ -159,16 +185,36 @@ class DNN:
                 y_batch = y_train[i:i+batch_size]
 
                 activations = self.forward(X_batch)
-                self.backward(activations, y_batch, lr, reg_lambda)
+                self.backward(activations, y_batch, current_lr, reg_lambda, momentum)
 
             # Calculate loss on training set
             train_loss = self.cross_entropy_loss(y_train, self.forward(X_train)[-1])
 
             if X_val is not None and y_val is not None:
                 val_loss = self.cross_entropy_loss(y_val, self.forward(X_val)[-1])
+                history.append((train_loss, val_loss))
+                
                 if verbose:
                     print(f"Epoch {epoch+1}/{nb_epochs} - Train Loss: {train_loss:.4f} - Val Loss: {val_loss:.4f}")
-                history.append((train_loss, val_loss))
+                
+                # Early stopping logic
+                if early_stopping:
+                    if val_loss < best_val_loss - min_delta:
+                        best_val_loss = val_loss
+                        wait = 0
+                        # Save best weights
+                        best_weights = [w.copy() for w in self.weights]
+                        best_biases = [b.copy() for b in self.biases]
+                    else:
+                        wait += 1
+                        if wait >= patience:
+                            if verbose:
+                                print(f"Early stopping at epoch {epoch+1}")
+                            # Restore best weights
+                            if best_weights is not None:
+                                self.weights = best_weights
+                                self.biases = best_biases
+                            break
             else:
                 if verbose:
                     print(f"Epoch {epoch+1}/{nb_epochs} - Train Loss: {train_loss:.4f}")

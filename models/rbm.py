@@ -123,7 +123,8 @@ class RBM:
         return reconstruction_error
     
     def fit(self, data, nb_epochs=10, batch_size=100, lr=0.01, k=1,
-            momentum=0.0, weight_decay=0.0, l1_reg=0.0, decay_rate=1.0, verbose=True):
+            momentum=0.0, weight_decay=0.0, l1_reg=0.0, decay_rate=1.0, verbose=True,
+            momentum_schedule=None):
         """
         Train the RBM using Contrastive Divergence.
         
@@ -140,7 +141,7 @@ class RBM:
         k: int
             Number of Gibbs sampling steps
         momentum: float
-            Momentum coefficient
+            Initial momentum coefficient
         weight_decay: float
             L2 regularization parameter
         l1_reg: float
@@ -149,6 +150,8 @@ class RBM:
             Learning rate decay rate
         verbose: bool
             Whether to print progress
+        momentum_schedule: dict, optional
+            Dictionary with epoch number as key and new momentum value as value
             
         Returns:
         --------
@@ -156,11 +159,18 @@ class RBM:
         """
         original_lr = lr
         self.losses = []
+        current_momentum = momentum
         
         for epoch in range(nb_epochs):
             # Apply learning rate decay
             if epoch > 0:
                 lr = original_lr * (decay_rate ** epoch)
+            
+            # Apply momentum schedule if provided
+            if momentum_schedule is not None and epoch in momentum_schedule:
+                current_momentum = momentum_schedule[epoch]
+                if verbose:
+                    print(f"Epoch {epoch+1}: Updating momentum to {current_momentum}")
             
             # Shuffle data
             indices = np.arange(data.shape[0])
@@ -172,7 +182,7 @@ class RBM:
             # Mini-batch training
             for i in range(0, data.shape[0], batch_size):
                 batch = data_shuffled[i:i+batch_size]
-                batch_error = self.contrastive_divergence(batch, k, lr, momentum, weight_decay, l1_reg)
+                batch_error = self.contrastive_divergence(batch, k, lr, current_momentum, weight_decay, l1_reg)
                 epoch_losses.append(batch_error)
             
             avg_loss = np.mean(epoch_losses)

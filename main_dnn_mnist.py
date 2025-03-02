@@ -434,15 +434,120 @@ def run_hyperparameter_experiments(X_train, y_train_onehot, X_test, y_test_oneho
         'size_experiment': (sample_sizes, pretrained_size_train_errors, pretrained_size_test_errors, random_size_train_errors, random_size_test_errors)
     }
 
-def train_optimal_model(X_train, y_train_onehot, X_test, y_test_onehot):
-    """Train a model with optimal configuration and visualize results."""
+def train_optimal_model(X_train, y_train_onehot, X_test, y_test_onehot, X_val=None, y_val_onehot=None,
+                       use_custom_hyperparams=True):
+    """
+    Train a model with optimal configuration and visualize results.
+    
+    Parameters:
+    -----------
+    X_train, y_train_onehot, X_test, y_test_onehot:
+        Training and testing data
+    X_val, y_val_onehot:
+        Optional validation data
+    use_custom_hyperparams:
+        Whether to use the custom hyperparameters
+    
+    Returns:
+    --------
+    DNN
+        Trained DNN model
+    """
     print("\nTraining DNN with optimal configuration and pre-training...")
-    # Train models with optimal configuration
+    # Define the architecture
     layer_sizes = [784, 500, 500, 2000, 10]
-    dnn_pretrained, _, _, _ = train_and_evaluate(
-        X_train, y_train_onehot, X_test, y_test_onehot,
-        layer_sizes, use_pretraining=True, verbose=True, 
-        save_model=True, model_name="optimal_dnn")
+    
+    if use_custom_hyperparams:
+        # Pre-training hyperparameters
+        pretrain_params = {
+            'nb_epochs': 50,
+            'batch_size': 100,
+            'lr': 0.01,
+            'weight_decay': 0.0002,
+            'momentum': 0.5,
+            'momentum_schedule': {5: 0.9},  # Increase momentum to 0.9 after 5 epochs
+            'k': 1  # CD-1 (single step Contrastive Divergence)
+        }
+        
+        # Fine-tuning hyperparameters
+        finetune_params = {
+            'nb_epochs': 100,
+            'batch_size': 100,
+            'lr': 0.1,
+            'decay_rate': 0.998,  # Exponential decay
+            'reg_lambda': 0.0002,  # L2 weight decay
+            'momentum': 0.9,
+            'early_stopping': True,
+            'patience': 10
+        }
+        
+        print("Using custom hyperparameters for training:")
+        print(f"Pre-training: {pretrain_params}")
+        print(f"Fine-tuning: {finetune_params}")
+    else:
+        # Default hyperparameters (as used in the original code)
+        pretrain_params = {
+            'nb_epochs': 100,
+            'batch_size': 100,
+            'lr': 0.1,
+            'weight_decay': 0.0,
+            'momentum': 0.0,
+            'momentum_schedule': None,
+            'k': 1  # Explicitly set CD-1 for default as well
+        }
+        
+        finetune_params = {
+            'nb_epochs': 200,
+            'batch_size': 100,
+            'lr': 0.1,
+            'decay_rate': 1.0,
+            'reg_lambda': 0.0,
+            'momentum': 0.0,
+            'early_stopping': False,
+            'patience': 10
+        }
+        
+        print("Using default hyperparameters for training")
+    
+    # Pre-training with DBN
+    print(f"Pretraining DBN with {len(layer_sizes)-2} hidden layers...")
+    dbn = DBN(layer_sizes[:-1])
+    dbn.fit(X_train, **pretrain_params)
+    
+    # Initialize DNN with pre-trained weights
+    print(f"Initializing DNN with pre-trained weights...")
+    dnn = DNN(layer_sizes, dbn=dbn)
+    
+    # Fine-tune DNN with supervision
+    print(f"Fine-tuning DNN for {finetune_params['nb_epochs']} epochs (or until early stopping)...")
+    
+    # Use validation set if provided
+    if X_val is not None and y_val_onehot is not None:
+        history = dnn.fit(X_train, y_train_onehot, X_val, y_val_onehot, 
+                          verbose=True, **finetune_params)
+    else:
+        # Split training data to create a validation set
+        n_val = int(0.1 * X_train.shape[0])
+        X_val_split = X_train[-n_val:]
+        y_val_split = y_train_onehot[-n_val:]
+        X_train_split = X_train[:-n_val]
+        y_train_split = y_train_onehot[:-n_val]
+        
+        history = dnn.fit(X_train_split, y_train_split, X_val_split, y_val_split, 
+                          verbose=True, **finetune_params)
+    
+    # Evaluate the DNN
+    train_error = dnn.error_rate(X_train, y_train_onehot)
+    test_error = dnn.error_rate(X_test, y_test_onehot)
+    
+    print(f"Training error: {train_error:.4f}")
+    print(f"Test error: {test_error:.4f}")
+    
+    # Save the model
+    model_path = f"results/models/optimal_dnn_{'custom' if use_custom_hyperparams else 'default'}.pkl"
+    print(f"Saving model to {model_path}")
+    with open(model_path, 'wb') as f:
+        pickle.dump(dnn, f)
     
     print("\nShowing output probabilities for a few test samples...")
     # Load original labels for visualization
@@ -450,11 +555,11 @@ def train_optimal_model(X_train, y_train_onehot, X_test, y_test_onehot):
         data = pickle.load(f)
         y_test = data['y_test']
     
-    show_output_probabilities(dnn_pretrained, X_test, y_test)
+    show_output_probabilities(dnn, X_test, y_test)
     
     print("\nOptimal model training completed.")
     
-    return dnn_pretrained
+    return dnn
 
 if __name__ == "__main__":
     # Load MNIST dataset (now always one-hot encoded)
@@ -465,6 +570,7 @@ if __name__ == "__main__":
     #run_hyperparameter_experiments(
     #    X_train, y_train_onehot, X_test, y_test_onehot)
     
-    # Train the optimal model
+    # Train the optimal model with custom hyperparameters
+    # Set use_custom_hyperparams to False to use default values
     optimal_model = train_optimal_model(
-        X_train, y_train_onehot, X_test, y_test_onehot)
+        X_train, y_train_onehot, X_test, y_test_onehot, use_custom_hyperparams=True)

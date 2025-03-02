@@ -21,7 +21,8 @@ class DBN:
         self.pretrain_errors = []
 
     def fit(self, data, nb_epochs=10, batch_size=100, lr=0.01, k=1,
-            momentum=0.0, weight_decay=0.0, l1_reg=0.0, decay_rate=1.0, verbose=True):
+            momentum=0.0, weight_decay=0.0, l1_reg=0.0, decay_rate=1.0, verbose=True,
+            momentum_schedule=None):
         """
         Train the DBN using greedy layer-wise pretraining.
         
@@ -38,7 +39,7 @@ class DBN:
         k: int
             Number of Gibbs sampling steps
         momentum: float
-            Momentum coefficient
+            Initial momentum coefficient
         weight_decay: float
             L2 regularization parameter
         l1_reg: float
@@ -47,6 +48,8 @@ class DBN:
             Learning rate decay rate
         verbose: bool
             Whether to print progress
+        momentum_schedule: dict, optional
+            Dictionary with epoch number as key and new momentum value as value
             
         Returns:
         --------
@@ -57,7 +60,8 @@ class DBN:
         for i, rbm in enumerate(self.rbms):
             print(f"Pretraining layer {i+1}/{len(self.rbms)}...")
             rbm.fit(input_data, nb_epochs, batch_size, lr, k,
-                    momentum, weight_decay, l1_reg, decay_rate, verbose)
+                    momentum, weight_decay, l1_reg, decay_rate, verbose,
+                    momentum_schedule=momentum_schedule)
             self.pretrain_errors.append(rbm.losses)
             p_h, _ = rbm.sample_hidden(input_data)
             input_data = p_h
