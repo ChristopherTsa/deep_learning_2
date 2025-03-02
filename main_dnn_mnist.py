@@ -435,7 +435,7 @@ def run_hyperparameter_experiments(X_train, y_train_onehot, X_test, y_test_oneho
     }
 
 def train_optimal_model(X_train, y_train_onehot, X_test, y_test_onehot, X_val=None, y_val_onehot=None,
-                       use_custom_hyperparams=True):
+                       use_custom_hyperparams=True, load_pretrained_dbn=False):
     """
     Train a model with optimal configuration and visualize results.
     
@@ -447,6 +447,8 @@ def train_optimal_model(X_train, y_train_onehot, X_test, y_test_onehot, X_val=No
         Optional validation data
     use_custom_hyperparams:
         Whether to use the custom hyperparameters
+    load_pretrained_dbn:
+        Whether to load a pre-trained DBN instead of training a new one
     
     Returns:
     --------
@@ -460,9 +462,9 @@ def train_optimal_model(X_train, y_train_onehot, X_test, y_test_onehot, X_val=No
     if use_custom_hyperparams:
         # Pre-training hyperparameters
         pretrain_params = {
-            'nb_epochs': 50,
+            'nb_epochs': 100,
             'batch_size': 100,
-            'lr': 0.01,
+            'lr': 0.1,
             'weight_decay': 0.0002,
             'momentum': 0.5,
             'momentum_schedule': {5: 0.9},  # Increase momentum to 0.9 after 5 epochs
@@ -471,14 +473,16 @@ def train_optimal_model(X_train, y_train_onehot, X_test, y_test_onehot, X_val=No
         
         # Fine-tuning hyperparameters
         finetune_params = {
-            'nb_epochs': 100,
+            'nb_epochs': 200,
             'batch_size': 100,
-            'lr': 0.1,
-            'decay_rate': 0.998,  # Exponential decay
+            'lr': 0.02,
+            'decay_rate': 0.99,  # Exponential decay
             'reg_lambda': 0.0002,  # L2 weight decay
-            'momentum': 0.9,
-            'early_stopping': True,
-            'patience': 10
+            'momentum': 0.5,      # Start with lower momentum
+            'early_stopping': False,
+            'patience': 20,
+            'min_delta': 0.0005,  # Smaller improvement threshold
+            'momentum_schedule': {5: 0.9}  # Increase momentum to 0.9 after epoch 5
         }
         
         print("Using custom hyperparameters for training:")
@@ -509,10 +513,37 @@ def train_optimal_model(X_train, y_train_onehot, X_test, y_test_onehot, X_val=No
         
         print("Using default hyperparameters for training")
     
-    # Pre-training with DBN
-    print(f"Pretraining DBN with {len(layer_sizes)-2} hidden layers...")
-    dbn = DBN(layer_sizes[:-1])
-    dbn.fit(X_train, **pretrain_params)
+    # Get pre-trained DBN (either by loading or training)
+    if load_pretrained_dbn:
+        dbn_path = f"results/models/optimal_dbn_{'custom' if use_custom_hyperparams else 'default'}.pkl"
+        try:
+            print(f"Loading pre-trained DBN from {dbn_path}...")
+            with open(dbn_path, 'rb') as f:
+                dbn = pickle.load(f)
+            print("Pre-trained DBN loaded successfully.")
+        except (FileNotFoundError, pickle.PickleError) as e:
+            print(f"Error loading pre-trained DBN: {e}")
+            print("Falling back to training a new DBN.")
+            # Pre-training with DBN
+            print(f"Pretraining DBN with {len(layer_sizes)-2} hidden layers...")
+            dbn = DBN(layer_sizes[:-1])
+            dbn.fit(X_train, **pretrain_params)
+            
+            # Save the pre-trained DBN
+            print(f"Saving pre-trained DBN to {dbn_path}")
+            with open(dbn_path, 'wb') as f:
+                pickle.dump(dbn, f)
+    else:
+        # Pre-training with DBN
+        print(f"Pretraining DBN with {len(layer_sizes)-2} hidden layers...")
+        dbn = DBN(layer_sizes[:-1])
+        dbn.fit(X_train, **pretrain_params)
+        
+        # Save the pre-trained DBN
+        dbn_path = f"results/models/optimal_dbn_{'custom' if use_custom_hyperparams else 'default'}.pkl"
+        print(f"Saving pre-trained DBN to {dbn_path}")
+        with open(dbn_path, 'wb') as f:
+            pickle.dump(dbn, f)
     
     # Initialize DNN with pre-trained weights
     print(f"Initializing DNN with pre-trained weights...")
@@ -523,7 +554,7 @@ def train_optimal_model(X_train, y_train_onehot, X_test, y_test_onehot, X_val=No
     
     # Use validation set if provided
     if X_val is not None and y_val_onehot is not None:
-        history = dnn.fit(X_train, y_train_onehot, X_val, y_val_onehot, 
+        history = dnn.fit(X_train, y_train_onehot, X_val, y_val_onehot,
                           verbose=True, **finetune_params)
     else:
         # Split training data to create a validation set
@@ -572,5 +603,8 @@ if __name__ == "__main__":
     
     # Train the optimal model with custom hyperparameters
     # Set use_custom_hyperparams to False to use default values
+    # Set load_pretrained_dbn to True to load a pre-trained DBN instead of training a new one
     optimal_model = train_optimal_model(
-        X_train, y_train_onehot, X_test, y_test_onehot, use_custom_hyperparams=True)
+        X_train, y_train_onehot, X_test, y_test_onehot, 
+        use_custom_hyperparams=True, 
+        load_pretrained_dbn=True)  # Set to True to load a previously trained DBN

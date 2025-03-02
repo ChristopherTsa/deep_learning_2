@@ -119,7 +119,7 @@ class DNN:
 
     def fit(self, X_train, y_train, X_val=None, y_val=None, nb_epochs=10, batch_size=100,
             lr=0.01, decay_rate=1.0, reg_lambda=0.0, verbose=True, momentum=0.0,
-            early_stopping=False, patience=10, min_delta=0.001):
+            early_stopping=False, patience=10, min_delta=0.001, momentum_schedule=None):
         """
         Train the neural network.
         
@@ -146,13 +146,15 @@ class DNN:
         verbose: bool
             Whether to print progress
         momentum: float
-            Momentum coefficient
+            Initial momentum coefficient
         early_stopping: bool
             Whether to use early stopping
         patience: int
             Number of epochs to wait for improvement before stopping
         min_delta: float
             Minimum change to qualify as improvement
+        momentum_schedule: dict
+            Dictionary mapping epoch numbers to momentum values
             
         Returns:
         --------
@@ -161,6 +163,7 @@ class DNN:
         """
         history = []
         initial_lr = lr
+        current_momentum = momentum
         
         # Early stopping variables
         best_val_loss = float('inf')
@@ -169,7 +172,12 @@ class DNN:
         best_biases = None
         
         for epoch in range(nb_epochs):
-            
+            # Update momentum according to schedule if provided
+            if momentum_schedule and epoch in momentum_schedule:
+                current_momentum = momentum_schedule[epoch]
+                if verbose:
+                    print(f"Epoch {epoch+1}: Updating momentum to {current_momentum}")
+                
             # Apply learning rate decay
             current_lr = initial_lr * (decay_rate ** epoch)
             
@@ -185,7 +193,7 @@ class DNN:
                 y_batch = y_train[i:i+batch_size]
 
                 activations = self.forward(X_batch)
-                self.backward(activations, y_batch, current_lr, reg_lambda, momentum)
+                self.backward(activations, y_batch, current_lr, reg_lambda, current_momentum)
 
             # Calculate loss on training set
             train_loss = self.cross_entropy_loss(y_train, self.forward(X_train)[-1])
