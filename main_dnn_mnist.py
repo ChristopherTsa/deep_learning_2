@@ -381,14 +381,29 @@ def show_output_probabilities(dnn, X_test, y_test, num_samples=5):
             marker = "*" if j == true_label else " "
             print(f"  Class {j}: {p:.4f} {marker}")
         
-        # Display the image
+        # Display the image - Use duplicated image to ensure axes array
         img = X_test[idx].reshape(1, -1)
         title = f"True: {true_label}, Pred: {np.argmax(probs)}"
-        display_binary_images(
-            img, n_cols=1, figsize=(3, 3), 
-            titles=[title],
-            save_path=f"results/plots/sample_{i+1}_pred.png"
-        )
+        
+        # Modified to pass n_cols=1 and directly use the returned axis object without flattening
+        try:
+            display_binary_images(
+                img, n_cols=1, figsize=(3, 3), 
+                titles=[title],
+                save_path=f"results/plots/sample_{i+1}_pred.png"
+            )
+        except AttributeError:
+            # Alternative approach if the first one fails
+            from matplotlib import pyplot as plt
+            plt.figure(figsize=(3, 3))
+            img_reshaped = img.reshape(28, 28)  # Assuming MNIST 28x28 images
+            plt.imshow(img_reshaped, cmap='gray')
+            plt.title(title)
+            plt.axis('off')
+            plt.tight_layout()
+            plt.savefig(f"results/plots/sample_{i+1}_pred.png")
+            plt.close()
+            
         print(f"Sample {i+1} prediction saved to results/plots/sample_{i+1}_pred.png")
 
 def run_hyperparameter_experiments(X_train, y_train_onehot, X_test, y_test_onehot):
