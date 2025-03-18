@@ -464,7 +464,7 @@ def train_optimal_model(X_train, y_train_onehot, X_test, y_test_onehot, X_val=No
         pretrain_params = {
             'nb_epochs': 100,
             'batch_size': 100,
-            'lr': 0.1,
+            'lr': 0.05,
             'weight_decay': 0.0002,
             'momentum': 0.5,
             'momentum_schedule': {5: 0.9},  # Increase momentum to 0.9 after 5 epochs
@@ -475,14 +475,14 @@ def train_optimal_model(X_train, y_train_onehot, X_test, y_test_onehot, X_val=No
         finetune_params = {
             'nb_epochs': 200,
             'batch_size': 100,
-            'lr': 0.02,
-            'decay_rate': 0.99,  # Exponential decay
-            'reg_lambda': 0.0002,  # L2 weight decay
-            'momentum': 0.5,      # Start with lower momentum
+            'lr': 0.01,
+            'decay_rate': 1.0,  # Exponential decay
+            'reg_lambda': 0.0001,  # L2 weight decay
+            'momentum': 0.0,      # Start with lower momentum
             'early_stopping': False,
             'patience': 20,
             'min_delta': 0.0005,  # Smaller improvement threshold
-            'momentum_schedule': {5: 0.9}  # Increase momentum to 0.9 after epoch 5
+            'momentum_schedule': None  # Increase momentum to 0.9 after epoch 5
         }
         
         print("Using custom hyperparameters for training:")
@@ -540,7 +540,7 @@ def train_optimal_model(X_train, y_train_onehot, X_test, y_test_onehot, X_val=No
         dbn.fit(X_train, **pretrain_params)
         
         # Save the pre-trained DBN
-        dbn_path = f"results/models/optimal_dbn_{'custom' if use_custom_hyperparams else 'default'}.pkl"
+        dbn_path = f"results/models/optimal_dbn_{'custom' if use_custom_hyperparams else 'default'}_optimized.pkl"
         print(f"Saving pre-trained DBN to {dbn_path}")
         with open(dbn_path, 'wb') as f:
             pickle.dump(dbn, f)
@@ -575,7 +575,7 @@ def train_optimal_model(X_train, y_train_onehot, X_test, y_test_onehot, X_val=No
     print(f"Test error: {test_error:.4f}")
     
     # Save the model
-    model_path = f"results/models/optimal_dnn_{'custom' if use_custom_hyperparams else 'default'}.pkl"
+    model_path = f"results/models/optimal_dnn_{'custom' if use_custom_hyperparams else 'default'}_optimized.pkl"
     print(f"Saving model to {model_path}")
     with open(model_path, 'wb') as f:
         pickle.dump(dnn, f)
@@ -598,13 +598,13 @@ if __name__ == "__main__":
         binarize_threshold=0.5, normalize=True, use_cache=True)
     
     # Run hyperparameter experiments
-    #run_hyperparameter_experiments(
-    #    X_train, y_train_onehot, X_test, y_test_onehot)
+    run_hyperparameter_experiments(
+        X_train, y_train_onehot, X_test, y_test_onehot)
     
     # Train the optimal model with custom hyperparameters
     # Set use_custom_hyperparams to False to use default values
     # Set load_pretrained_dbn to True to load a pre-trained DBN instead of training a new one
-    optimal_model = train_optimal_model(
-        X_train, y_train_onehot, X_test, y_test_onehot, 
-        use_custom_hyperparams=True, 
-        load_pretrained_dbn=True)  # Set to True to load a previously trained DBN
+    #optimal_model = train_optimal_model(
+    #    X_train, y_train_onehot, X_test, y_test_onehot, 
+    #    use_custom_hyperparams=False, 
+    #    load_pretrained_dbn=False)  # Set to True to load a previously trained DBN

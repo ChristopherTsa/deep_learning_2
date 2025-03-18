@@ -56,15 +56,17 @@ class DBN:
         self
         """
         self.trained = True
-        input_data = data.copy()
+        # Avoid unnecessary copy - use data directly when possible
+        input_data = data
+        
         for i, rbm in enumerate(self.rbms):
             print(f"Pretraining layer {i+1}/{len(self.rbms)}...")
             rbm.fit(input_data, nb_epochs, batch_size, lr, k,
                     momentum, weight_decay, l1_reg, decay_rate, verbose,
                     momentum_schedule=momentum_schedule)
             self.pretrain_errors.append(rbm.losses)
-            p_h, _ = rbm.sample_hidden(input_data)
-            input_data = p_h
+            # Transform data to next layer without unnecessary copies
+            input_data = rbm.transform(input_data)
         return self
     
     def transform(self, X):
@@ -81,7 +83,8 @@ class DBN:
         array-like
             Transformed data (top-level representation)
         """
-        hidden = X.copy()
+        # Avoid unnecessary copy
+        hidden = X
         for rbm in self.rbms:
             hidden = rbm.transform(hidden)
         return hidden
@@ -100,8 +103,8 @@ class DBN:
         array-like
             Reconstructed data
         """
-        # Go up through layers
-        hidden = X.copy()
+        # Avoid unnecessary copy
+        hidden = X
         for rbm in self.rbms:
             hidden = rbm.transform(hidden)
         

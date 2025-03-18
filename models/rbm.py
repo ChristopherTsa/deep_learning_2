@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.special import expit  # More efficient sigmoid implementation
 
 class RBM:
     def __init__(self, n_visible, n_hidden):
@@ -13,7 +14,8 @@ class RBM:
             Number of hidden units
         """
         # Initialize weights and biases
-        self.W = np.random.normal(0, 0.01, (n_visible, n_hidden))
+        #self.W = np.random.normal(0, 0.01, (n_visible, n_hidden))
+        self.W = np.random.randn(n_visible, n_hidden) * np.sqrt(2.0 / (n_visible + n_hidden))
         self.a = np.zeros(n_visible)  # Bias for visible units
         self.b = np.zeros(n_hidden)   # Bias for hidden units
         
@@ -23,7 +25,7 @@ class RBM:
 
     def sigmoid(self, x):
         """Sigmoid activation function."""
-        return 1 / (1 + np.exp(-np.clip(x, -15, 15)))
+        return expit(x)  # Using SciPy's optimized implementation
     
     def sample_hidden(self, v):
         """
@@ -39,10 +41,10 @@ class RBM:
         tuple
             (p(h|v), sampled h)
         """
-        # Calculate p(h|v)
-        p_h = self.sigmoid(np.dot(v, self.W) + self.b)
-        # Sample h from p(h|v)
-        h = np.random.binomial(1, p_h)
+        # Calculate p(h|v) - more efficiently with matrix operations
+        p_h = expit(np.dot(v, self.W) + self.b)
+        # Sample h from p(h|v) - use vectorized operations
+        h = (np.random.random(p_h.shape) < p_h).astype(np.float64)
         return p_h, h
     
     def sample_visible(self, h):
@@ -59,10 +61,10 @@ class RBM:
         tuple
             (p(v|h), sampled v)
         """
-        # Calculate p(v|h)
-        p_v = self.sigmoid(np.dot(h, self.W.T) + self.a)
-        # Sample v from p(v|h)
-        v = np.random.binomial(1, p_v)
+        # Calculate p(v|h) - more efficiently
+        p_v = expit(np.dot(h, self.W.T) + self.a)
+        # Sample v from p(v|h) - use vectorized operations
+        v = (np.random.random(p_v.shape) < p_v).astype(np.float64)
         return p_v, v
     
     def contrastive_divergence(self, v_pos, k=1, lr=0.01, momentum=0.0, weight_decay=0.0, l1_reg=0.0):
@@ -99,17 +101,16 @@ class RBM:
             p_v_neg, v_neg = self.sample_visible(h_neg)
             p_h_neg, h_neg = self.sample_hidden(v_neg)
         
-        # Compute gradients
+        # Compute gradients - vectorize operations
         batch_size = v_pos.shape[0]
         
-        # Positive associations
-        pos_associations = np.dot(v_pos.T, p_h_pos)
-        # Negative associations
-        neg_associations = np.dot(p_v_neg.T, p_h_neg)
+        # Optimize matrix operations
+        pos_associations = v_pos.T @ p_h_pos
+        neg_associations = p_v_neg.T @ p_h_neg
         
-        # Apply updates with momentum and regularization
+        # Optimize parameter updates
         self.dW = momentum * self.dW + lr * ((pos_associations - neg_associations) / batch_size - 
-                                            weight_decay * self.W - l1_reg * np.sign(self.W))
+                                           weight_decay * self.W - l1_reg * np.sign(self.W))
         self.da = momentum * self.da + lr * np.mean(v_pos - p_v_neg, axis=0)
         self.db = momentum * self.db + lr * np.mean(p_h_pos - p_h_neg, axis=0)
         
@@ -122,8 +123,8 @@ class RBM:
         reconstruction_error = np.mean((v_pos - p_v_neg) ** 2)
         return reconstruction_error
     
-    def fit(self, data, nb_epochs=10, batch_size=100, lr=0.01, k=1,
-            momentum=0.0, weight_decay=0.0, l1_reg=0.0, decay_rate=1.0, verbose=True,
+    def fit(self, data, nb_epochs=100, batch_size=100, lr=0.1, k=1,
+            momentum=0.9, weight_decay=0.0, l1_reg=0.0, decay_rate=1.0, verbose=True,
             momentum_schedule=None):
         """
         Train the RBM using Contrastive Divergence.
@@ -245,12 +246,18 @@ class RBM:
             Generated samples
         """
         # Start with random visible units
-        v = np.random.binomial(1, 0.5, (n_samples, self.n_visible))
+        v = (np.random.random((n_samples, self.n_visible)) < 0.5).astype(np.float64)
         
-        # Perform Gibbs sampling
+        # Pre-allocate arrays for efficiency
+        p_h = np.zeros((n_samples, self.n_hidden))
+        h = np.zeros((n_samples, self.n_hidden))
+        p_v = np.zeros((n_samples, self.n_visible))
+        
         for _ in range(gibbs_steps):
-            p_h, h = self.sample_hidden(v)
-            p_v, v = self.sample_visible(h)
+            p_h = expit(np.dot(v, self.W) + self.b)
+            h = (np.random.random(p_h.shape) < p_h).astype(np.float64)
+            p_v = expit(np.dot(h, self.W.T) + self.a)
+            v = (np.random.random(p_v.shape) < p_v).astype(np.float64)
             
         return p_v
 

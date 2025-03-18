@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.special import expit, softmax
 
 def xavier_init(fan_in, fan_out):
     """Xavier weight initialization."""
@@ -30,19 +31,23 @@ class DNN:
             self.weights.append(xavier_init(layer_sizes[-2], layer_sizes[-1]))
             self.biases.append(np.zeros(layer_sizes[-1]))
         else:
-            # Random initialization if no DBN provided
+            # True random initialization if no DBN provided
             for i in range(len(layer_sizes) - 1):
-                self.weights.append(xavier_init(layer_sizes[i], layer_sizes[i + 1]))
+                # Use small random values from normal distribution
+                self.weights.append(0.01 * np.random.randn(layer_sizes[i], layer_sizes[i + 1]))
                 self.biases.append(np.zeros(layer_sizes[i + 1]))
 
     def softmax(self, z):
         """Softmax activation function with numerical stability."""
-        exp_z = np.exp(z - np.max(z, axis=1, keepdims=True))
-        return exp_z / np.sum(exp_z, axis=1, keepdims=True)
+        # Added clipping to prevent overflow
+        z_clipped = np.clip(z, -500, 500)
+        return softmax(z_clipped, axis=1)
 
     def sigmoid(self, z):
-        """Sigmoid activation function."""
-        return 1 / (1 + np.exp(-z))
+        """Sigmoid activation function with numerical stability."""
+        # Clip values to prevent overflow
+        z_clipped = np.clip(z, -500, 500)
+        return expit(z_clipped)  # Using SciPy's optimized implementation
 
     def cross_entropy_loss(self, y_true, y_pred):
         """Cross-entropy loss function."""
@@ -63,12 +68,22 @@ class DNN:
             List of activations at each layer
         """
         activations = [X]
-        for W, b in zip(self.weights[:-1], self.biases[:-1]):
-            X = self.sigmoid(np.dot(X, W) + b)
-            activations.append(X)
+        # Use current layer output directly without copying
+        layer_output = X
         
-        # Last layer with softmax
-        logits = np.dot(X, self.weights[-1]) + self.biases[-1]
+        for W, b in zip(self.weights[:-1], self.biases[:-1]):
+            # More efficient matrix operations with numerical stability
+            z = layer_output @ W + b
+            # Check for potential overflow values
+            if np.max(np.abs(z)) > 500:
+                z = np.clip(z, -500, 500)
+            layer_output = self.sigmoid(z)
+            activations.append(layer_output)
+        
+        # Last layer with softmax - optimize computation
+        logits = layer_output @ self.weights[-1] + self.biases[-1]
+        if np.max(np.abs(logits)) > 500:
+            logits = np.clip(logits, -500, 500)
         activations.append(self.softmax(logits))
         return activations
 
@@ -89,11 +104,16 @@ class DNN:
         momentum: float
             Momentum coefficient for weight updates
         """
+        # Compute output layer error - optimize vector operations
         deltas = [activations[-1] - y_true]
+        batch_size = y_true.shape[0]
 
-        # Calculate gradients for hidden layers
+        # Calculate gradients for hidden layers - optimize backpropagation
         for i in range(len(self.weights) - 1, 0, -1):
-            delta = np.dot(deltas[0], self.weights[i].T) * activations[i] * (1 - activations[i])
+            # More efficient calculation of deltas with gradient clipping
+            delta = deltas[0] @ self.weights[i].T * activations[i] * (1 - activations[i])
+            # Clip gradients to prevent exploding gradients
+            delta = np.clip(delta, -1.0, 1.0)
             deltas.insert(0, delta)
 
         # Initialize velocity if not already done
@@ -101,15 +121,21 @@ class DNN:
             self.velocity_W = [np.zeros_like(w) for w in self.weights]
             self.velocity_b = [np.zeros_like(b) for b in self.biases]
 
-        # Update weights and biases with momentum
+        # Update weights and biases with momentum - optimize calculations
         for i in range(len(self.weights)):
-            grad_W = np.dot(activations[i].T, deltas[i]) / y_true.shape[0]
+            # More efficient gradient computation
+            grad_W = activations[i].T @ deltas[i] / batch_size
             grad_b = np.mean(deltas[i], axis=0)
             
             # Add L2 regularization penalty
-            grad_W += reg_lambda * self.weights[i]
+            if reg_lambda > 0:
+                grad_W += reg_lambda * self.weights[i]
             
-            # Apply momentum
+            # Clip gradients to prevent exploding gradients
+            grad_W = np.clip(grad_W, -1.0, 1.0)
+            grad_b = np.clip(grad_b, -1.0, 1.0)
+            
+            # Apply momentum with optimized updates
             self.velocity_W[i] = momentum * self.velocity_W[i] - lr * grad_W
             self.velocity_b[i] = momentum * self.velocity_b[i] - lr * grad_b
             
@@ -119,7 +145,8 @@ class DNN:
 
     def fit(self, X_train, y_train, X_val=None, y_val=None, nb_epochs=10, batch_size=100,
             lr=0.01, decay_rate=1.0, reg_lambda=0.0, verbose=True, momentum=0.0,
-            early_stopping=False, patience=10, min_delta=0.001, momentum_schedule=None):
+            early_stopping=False, patience=10, min_delta=0.001, momentum_schedule=None,
+            clip_gradient=1.0):
         """
         Train the neural network.
         
@@ -155,6 +182,8 @@ class DNN:
             Minimum change to qualify as improvement
         momentum_schedule: dict
             Dictionary mapping epoch numbers to momentum values
+        clip_gradient: float
+            Value to clip gradients during training to prevent overflow
             
         Returns:
         --------
