@@ -13,19 +13,28 @@ class RBM:
         n_hidden: int
             Number of hidden units
         """
+        # Set number of visible and hidden units
+        self.n_visible = n_visible
+        self.n_hidden = n_hidden
+        
         # Initialize weights and biases
         #self.W = np.random.normal(0, 0.01, (n_visible, n_hidden))
         self.W = np.random.randn(n_visible, n_hidden) * np.sqrt(2.0 / (n_visible + n_hidden))
-        self.a = np.zeros(n_visible)  # Bias for visible units
-        self.b = np.zeros(n_hidden)   # Bias for hidden units
+        self.a = np.zeros(n_visible)
+        self.b = np.zeros(n_hidden)
         
-        self.n_visible = n_visible
-        self.n_hidden = n_hidden
-        self.losses = []  # To store reconstruction errors during training
+        # Initialize velocity for momentum
+        self.velocity_W = np.zeros_like(self.W)
+        self.velocity_a = np.zeros_like(self.a)
+        self.velocity_b = np.zeros_like(self.b)
+        
+        # List to store training losses
+        self.losses = []
 
     def sigmoid(self, x):
         """Sigmoid activation function."""
-        return expit(x)  # Using SciPy's optimized implementation
+        #return 1 / (1 + np.exp(-x))
+        return expit(x)
     
     def sample_hidden(self, v):
         """

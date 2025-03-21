@@ -598,8 +598,8 @@ if __name__ == "__main__":
         binarize_threshold=0.5, normalize=True, use_cache=True)
     
     # Run hyperparameter experiments
-    run_hyperparameter_experiments(
-        X_train, y_train_onehot, X_test, y_test_onehot)
+    #run_hyperparameter_experiments(
+    #    X_train, y_train_onehot, X_test, y_test_onehot)
     
     # Train the optimal model with custom hyperparameters
     # Set use_custom_hyperparams to False to use default values
