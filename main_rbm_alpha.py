@@ -65,8 +65,8 @@ def create_data_splits(data, labels=None, val_size=0.1, test_size=0.2, random_st
         print(f"Data splits: Train: {train_data.shape[0]}, Validation: {val_data.shape[0]}, Test: {test_data.shape[0]}")
         return train_data, val_data, test_data
 
-def train_rbm(data, val_data=None, n_hidden=100, nb_epochs=1000, batch_size=10, 
-            learning_rate=0.01, k=1, model_name="rbm", verbose=True, save_model=True,
+def train_rbm(data, val_data=None, n_hidden=100, nb_epochs=100, batch_size=10, 
+            learning_rate=0.1, k=1, model_name="rbm", verbose=True, save_model=True,
             save_samples=True, save_weights=True, plot=True):
     """
     Train an RBM model and optionally visualize results.
@@ -170,7 +170,7 @@ def train_rbm(data, val_data=None, n_hidden=100, nb_epochs=1000, batch_size=10,
     return rbm
 
 def experiment_hidden_dimensions(train_data, val_data=None, hidden_dims=[50, 100, 200, 400], 
-                               nb_epochs=1000, batch_size=10, learning_rate=0.01, k=1, chars=None):
+                               nb_epochs=100, batch_size=10, learning_rate=0.1, k=1, chars=None):
     """
     Experiment with varying hidden dimensions in RBM.
     
@@ -260,8 +260,8 @@ def experiment_hidden_dimensions(train_data, val_data=None, hidden_dims=[50, 100
     print(f"Best hidden dimension: {best_dim} with {'validation' if rbm_dim.val_losses else 'training'} loss: {best_loss:.6f}")
     return losses_by_dim, best_dim
 
-def experiment_characters(char_sets, n_hidden=100, nb_epochs=1000, batch_size=10, 
-                        learning_rate=0.01, k=1):
+def experiment_characters(char_sets, n_hidden=100, nb_epochs=100, batch_size=10, 
+                        learning_rate=0.1, k=1):
     """
     Experiment with varying character sets in RBM.
     
@@ -341,7 +341,7 @@ def experiment_characters(char_sets, n_hidden=100, nb_epochs=1000, batch_size=10
     return losses_by_chars
 
 def experiment_learning_rate(train_data, val_data=None, learning_rates=[0.001, 0.01, 0.05, 0.1], 
-                           n_hidden=100, nb_epochs=1000, batch_size=10, k=1, chars=None):
+                           n_hidden=100, nb_epochs=100, batch_size=10, k=1, chars=None):
     """
     Experiment with varying learning rates in RBM.
     
@@ -432,7 +432,7 @@ def experiment_learning_rate(train_data, val_data=None, learning_rates=[0.001, 0
     return losses_by_lr, best_lr
 
 def experiment_batch_size(train_data, val_data=None, batch_sizes=[5, 10, 20, 50], 
-                        n_hidden=100, nb_epochs=1000, learning_rate=0.01, k=1, chars=None):
+                        n_hidden=100, nb_epochs=100, learning_rate=0.1, k=1, chars=None):
     """
     Experiment with varying batch sizes in RBM.
     
@@ -642,14 +642,11 @@ def main():
         learning_rate=best_lr,
         k=k,
         model_name="rbm_alpha_final",
-        verbose=True
+        verbose=True,
+        save_samples=True,
+        plot=True,
+        save_weights=True
     )
-    
-    # Evaluate on test data
-    test_samples = rbm_final.generate_samples(n_samples=25, gibbs_steps=200)
-    display_binary_images(test_samples, n_cols=5, figsize=(10, 5),
-                        titles=[f"Final Model Sample {i}" for i in range(10)],
-                        save_path="results/plots/rbm_final_test_samples.png")
     
     print("All experiments completed!")
 
