@@ -1,9 +1,61 @@
 import numpy as np
 from sklearn.datasets import fetch_openml
 from sklearn.preprocessing import Binarizer, OneHotEncoder
+from sklearn.model_selection import train_test_split
 import scipy.io as sio
 import os
 import pickle
+
+def create_data_splits(data, labels=None, val_size=0.1, test_size=0.2, random_state=42):
+    """
+    Create train/validation/test splits for the data.
+    
+    Parameters:
+    -----------
+    data: ndarray
+        Input data to split
+    labels: ndarray, optional
+        Labels corresponding to data samples
+    val_size: float
+        Proportion of data to use for validation
+    test_size: float
+        Proportion of data to use for testing
+    random_state: int
+        Random seed for reproducibility
+        
+    Returns:
+    --------
+    train_data: ndarray
+        Training data
+    val_data: ndarray
+        Validation data
+    test_data: ndarray
+        Test data
+    train_labels, val_labels, test_labels: ndarray, optional
+        Corresponding labels for each split if labels were provided
+    """
+    # First split data into temp (train+val) and test
+    if labels is not None:
+        temp_data, test_data, temp_labels, test_labels = train_test_split(
+            data, labels, test_size=test_size, random_state=random_state)
+        
+        # Then split temp data into train and validation
+        # Adjust val_size to account for the already removed test data
+        adjusted_val_size = val_size / (1 - test_size)
+        train_data, val_data, train_labels, val_labels = train_test_split(
+            temp_data, temp_labels, test_size=adjusted_val_size, random_state=random_state)
+        
+        print(f"Data splits: Train: {train_data.shape[0]}, Validation: {val_data.shape[0]}, Test: {test_data.shape[0]}")
+        return train_data, val_data, test_data, train_labels, val_labels, test_labels
+    else:
+        # Original behavior when no labels are provided
+        temp_data, test_data = train_test_split(data, test_size=test_size, random_state=random_state)
+        
+        adjusted_val_size = val_size / (1 - test_size)
+        train_data, val_data = train_test_split(temp_data, test_size=adjusted_val_size, random_state=random_state)
+        
+        print(f"Data splits: Train: {train_data.shape[0]}, Validation: {val_data.shape[0]}, Test: {test_data.shape[0]}")
+        return train_data, val_data, test_data
 
 #===============================================================================
 # Dataset Loading Functions

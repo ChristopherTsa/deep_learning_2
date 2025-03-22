@@ -7,7 +7,6 @@ from utils import (load_binary_alphadigits,
                    display_weights,
                    plot_losses,
                    plot_comparison_losses)
-import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 
 # Create directories for saving results if they don't exist

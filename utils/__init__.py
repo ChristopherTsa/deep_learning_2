@@ -2,7 +2,8 @@
 from .data_utils import (
     # Dataset loading functions
     load_mnist,
-    load_binary_alphadigits
+    load_binary_alphadigits,
+    create_data_splits
 )
 
 # Visualization functions
@@ -21,6 +22,7 @@ __all__ = [
     # Dataset loading functions
     'load_mnist',
     'load_binary_alphadigits',
+    'create_data_splits',
     
     # Plotting functions
     'plot_losses',
