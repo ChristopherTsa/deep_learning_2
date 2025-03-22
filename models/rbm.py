@@ -183,6 +183,23 @@ class RBM:
             
         return self.errors
     
+    def transform(self, data):
+        """
+        Transform data to hidden representation.
+        
+        Parameters:
+        -----------
+        data: array-like
+            Input data
+            
+        Returns:
+        --------
+        array-like
+            Hidden representation
+        """
+        p_h, _ = self.sample_hidden(data)
+        return p_h
+    
     def generate_samples(self, n_samples=10, gibbs_steps=200):
         """
         Generate samples from the RBM.

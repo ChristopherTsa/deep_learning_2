@@ -1,4 +1,4 @@
-from .rbm import RBM, PersistentRBM, TRBM
+from .rbm import RBM
 from .dbn import DBN
 from .dnn import DNN
 

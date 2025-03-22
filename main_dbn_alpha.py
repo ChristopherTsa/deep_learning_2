@@ -12,12 +12,12 @@ os.makedirs("results/plots", exist_ok=True)
 os.makedirs("results/models", exist_ok=True)
 
 # Parameters - adjusted to align with project specs
-layer_sizes = [320, 200, 100]  # 20x16=320 input size
-nb_epochs = 100  # As per project: 100 for RBM layers
+layer_sizes = [320, 200, 200]  # 20x16=320 input size
+nb_epochs = 1000
 batch_size = 10
-learning_rate = 0.1  # As per project recommendation
+learning_rate = 0.01
 k = 1  # CD-k steps
-chars = list(range(10))  # Load digits 0-9
+chars = [10, 11, 12, 13, 14] # Characters to load
 
 # Load data
 print("Loading Binary AlphaDigits dataset...")
@@ -41,7 +41,12 @@ print(f"Initializing DBN with layers: {layer_sizes}")
 dbn = DBN(layer_sizes)
 
 print(f"Training DBN for {nb_epochs} epochs per layer...")
-dbn.fit(data, nb_epochs=nb_epochs, batch_size=batch_size, lr=learning_rate, k=k, verbose=True)
+dbn.fit(data,
+        nb_epochs=nb_epochs,
+        batch_size=batch_size,
+        lr=learning_rate,
+        k=k,
+        verbose=True)
 
 # Save the trained model
 model_path = "results/models/dbn_alpha_digits.pkl"
@@ -51,29 +56,11 @@ with open(model_path, 'wb') as f:
 
 # Generate samples
 print("Generating samples from the trained DBN...")
-samples = dbn.predict(np.random.binomial(1, 0.5, (10, layer_sizes[0])))
-
-# Convert generated samples to binary (black and white) instead of grayscale
-samples = np.round(samples).astype(int)
+samples = dbn.generate_samples(n_samples=25, gibbs_steps=200)
 
 # Display generated samples
 print("Displaying generated samples:")
 display_binary_images(samples, n_cols=5, figsize=(10, 5), titles=[f"Generated {i}" for i in range(10)], save_path="results/plots/dbn_generated_samples.png")
-
-# Reconstruct random samples
-print("Reconstructing randomly selected samples...")
-random_indices = np.random.choice(len(data), size=10, replace=False)
-samples_to_reconstruct = data[random_indices]
-reconstructions = dbn.predict(samples_to_reconstruct)
-
-# Convert reconstructions to binary (black and white) instead of grayscale
-reconstructions = np.round(reconstructions).astype(int)
-
-# Display original and reconstructed samples side by side
-print("Displaying original and reconstructed samples:")
-all_images = np.vstack([samples_to_reconstruct, reconstructions])
-titles = [f"Original {i}" for i in range(10)] + [f"Reconstructed {i}" for i in range(10)]
-display_binary_images(all_images, n_cols=10, figsize=(15, 5), titles=titles, save_path="results/plots/dbn_reconstructions.png")
 
 # Plot pretraining errors
 print("Plotting pretraining errors:")
@@ -108,3 +95,195 @@ for i, rbm in enumerate(dbn.rbms):
                     save_path=f"results/plots/dbn_layer{i+1}_weights.png")
 
 print("DBN training and visualization complete!")
+
+# ========= Varying the hidden dimension =========
+print("\n========= Experiment: Varying the hidden dimension =========")
+
+# List of hidden dimensions to try
+hidden_dims = [100, 200, 400]
+errors_by_dim = {}
+
+print(f"Running experiment with hidden dimensions: {hidden_dims}")
+print(f"Using characters: {chars}")
+
+for dim in hidden_dims:
+    print(f"\nTraining DBN with {dim} units in hidden layers...")
+    
+    # Initialize DBN with current hidden dimension
+    current_layers = [320, dim, dim]
+    
+    print(f"Initializing DBN with layers: {current_layers}")
+    dbn_dim = DBN(current_layers)
+    
+    # Train the model
+    dbn_dim.fit(data,
+              nb_epochs=nb_epochs,
+              batch_size=batch_size,
+              lr=learning_rate,
+              k=k,
+              verbose=True)
+    
+    # Save the model
+    model_path = f"results/models/dbn_alpha_h{dim}.pkl"
+    print(f"Saving model to {model_path}")
+    with open(model_path, 'wb') as f:
+        pickle.dump(dbn_dim, f)
+    
+    # Store pretraining errors if available
+    if hasattr(dbn_dim, 'pretrain_errors') and dbn_dim.pretrain_errors:
+        errors_by_dim[dim] = dbn_dim.pretrain_errors
+    
+    # Generate and display samples
+    samples = dbn_dim.generate_samples(n_samples=25, gibbs_steps=200)
+    display_binary_images(samples, n_cols=5, figsize=(10, 5),
+                        titles=[f"Hidden={dim}, {i}" for i in range(10)],
+                        save_path=f"results/plots/dbn_h{dim}_samples.png")
+    
+    # Display weights for first layer
+    display_weights(dbn_dim.rbms[0], height=20, width=16, figsize=(10, 10), n_cols=10,
+                   save_path=f"results/plots/dbn_h{dim}_weights_layer1.png")
+
+# Plot comparative errors if available
+if errors_by_dim:
+    import matplotlib.pyplot as plt
+    plt.figure(figsize=(12, 6))
+    for dim, errors in errors_by_dim.items():
+        plt.plot(errors, label=f'Hidden Units: {dim}')
+    plt.xlabel('Epoch')
+    plt.ylabel('Pretraining Error')
+    plt.title('DBN Pretraining Error for Different Hidden Dimensions')
+    plt.legend()
+    plt.savefig("results/plots/dbn_hidden_dim_comparison.png")
+    plt.close()
+
+# ========= Varying the number of hidden layers =========
+print("\n========= Experiment: Varying the number of hidden layers =========")
+
+# Define different layer architectures to try
+layer_architectures = [
+    [320, 200],                  # 1 hidden layer
+    [320, 200, 200],             # 2 hidden layers
+    [320, 200, 200, 200],        # 3 hidden layers
+    [320, 200, 200, 200, 200]    # 4 hidden layers
+]
+
+errors_by_arch = {}
+
+for layers in layer_architectures:
+    layer_name = '_'.join(map(str, layers[1:]))  # Skip input layer in the name
+    print(f"\nTraining DBN with architecture: {layers}")
+    
+    # Initialize DBN with current architecture
+    dbn_layers = DBN(layers)
+    
+    # Train the model
+    dbn_layers.fit(data,
+                 nb_epochs=nb_epochs,
+                 batch_size=batch_size,
+                 lr=learning_rate,
+                 k=k,
+                 verbose=True)
+    
+    # Save the model
+    model_path = f"results/models/dbn_alpha_layers_{layer_name}.pkl"
+    print(f"Saving model to {model_path}")
+    with open(model_path, 'wb') as f:
+        pickle.dump(dbn_layers, f)
+    
+    # Store pretraining errors if available
+    if hasattr(dbn_layers, 'pretrain_errors') and dbn_layers.pretrain_errors:
+        errors_by_arch[layer_name] = dbn_layers.pretrain_errors
+    
+    # Generate and display samples
+    samples = dbn_layers.generate_samples(n_samples=25, gibbs_steps=200)
+    display_binary_images(samples, n_cols=5, figsize=(10, 5),
+                        titles=[f"Layers={layer_name}, {i}" for i in range(10)],
+                        save_path=f"results/plots/dbn_layers_{layer_name}_samples.png")
+    
+    # Display weights for first layer
+    display_weights(dbn_layers.rbms[0], height=20, width=16, figsize=(10, 10), n_cols=10,
+                   save_path=f"results/plots/dbn_layers_{layer_name}_weights_layer1.png")
+
+# Plot comparative errors if available
+if errors_by_arch:
+    plt.figure(figsize=(12, 6))
+    for arch_name, errors in errors_by_arch.items():
+        plt.plot(errors, label=f'Architecture: {arch_name}')
+    plt.xlabel('Epoch')
+    plt.ylabel('Pretraining Error')
+    plt.title('DBN Pretraining Error for Different Layer Architectures')
+    plt.legend()
+    plt.savefig("results/plots/dbn_layer_arch_comparison.png")
+    plt.close()
+
+# ========= Varying the number of characters =========
+print("\n========= Experiment: Varying the number of characters =========")
+
+# Define different character sets to try
+char_sets = [
+    [10, 11],      # Two characters
+    [10, 11, 12, 13, 14],  # Five characters
+    [10, 11, 12, 13, 14, 15, 16, 17, 18, 19],  # Ten characters
+    [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26]  # Seventeen characters
+]
+
+errors_by_chars = {}
+
+for char_set in char_sets:
+    char_name = '_'.join(map(str, char_set))
+    print(f"\nTraining DBN with characters: {char_set}")
+    
+    # Load data for current character set
+    data_subset = load_binary_alphadigits(chars=char_set)
+    print(f"Loaded {data_subset.shape[0]} samples")
+    
+    # Display some samples
+    random_indices = np.random.choice(len(data_subset), size=10, replace=False)
+    display_binary_images(data_subset[random_indices], n_cols=5, figsize=(10, 5),
+                        titles=[f"Char {char_name} - {i}" for i in range(10)],
+                        save_path=f"results/plots/dbn_orig_samples_chars_{char_name}.png")
+    
+    # Initialize and train DBN with default layer architecture
+    dbn_chars = DBN(layer_sizes)
+    
+    # Train the model
+    dbn_chars.fit(data_subset,
+                nb_epochs=nb_epochs,
+                batch_size=batch_size,
+                lr=learning_rate,
+                k=k,
+                verbose=True)
+    
+    # Save the model
+    model_path = f"results/models/dbn_alpha_chars_{char_name}.pkl"
+    print(f"Saving model to {model_path}")
+    with open(model_path, 'wb') as f:
+        pickle.dump(dbn_chars, f)
+    
+    # Store pretraining errors if available
+    if hasattr(dbn_chars, 'pretrain_errors') and dbn_chars.pretrain_errors:
+        errors_by_chars[char_name] = dbn_chars.pretrain_errors
+    
+    # Generate and display samples
+    samples = dbn_chars.generate_samples(n_samples=25, gibbs_steps=200)
+    display_binary_images(samples, n_cols=5, figsize=(10, 5),
+                        titles=[f"Chars={char_name}, {i}" for i in range(10)],
+                        save_path=f"results/plots/dbn_chars_{char_name}_samples.png")
+    
+    # Display weights for first layer
+    display_weights(dbn_chars.rbms[0], height=20, width=16, figsize=(10, 10), n_cols=10,
+                   save_path=f"results/plots/dbn_chars_{char_name}_weights_layer1.png")
+
+# Plot comparative errors if available
+if errors_by_chars:
+    plt.figure(figsize=(12, 6))
+    for char_name, errors in errors_by_chars.items():
+        plt.plot(errors, label=f'Characters: {char_name}')
+    plt.xlabel('Epoch')
+    plt.ylabel('Pretraining Error')
+    plt.title('DBN Pretraining Error for Different Character Sets')
+    plt.legend()
+    plt.savefig("results/plots/dbn_char_sets_comparison.png")
+    plt.close()
+
+print("All DBN experiments completed!")
