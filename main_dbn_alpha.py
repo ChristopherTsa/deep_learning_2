@@ -88,15 +88,15 @@ def train_dbn(data, val_data=None, layer_sizes=None, nb_epochs=100, batch_size=1
                              save_path=f"results/plots/{model_name}_samples.png")
     
     if plot:
-        # Plot pretraining errors
+        # Plot pretraining losses
         if verbose:
-            print("Plotting pretraining errors:")
-        if hasattr(dbn, 'pretrain_errors') and dbn.pretrain_errors:
-            plot_losses(dbn.pretrain_errors, 
-                       title="Pretraining errors by layer",
+            print("Plotting pretraining losses:")
+        if hasattr(dbn, 'pretrain_losses') and dbn.pretrain_losses:
+            plot_losses(dbn.pretrain_losses, 
+                       title="Pretraining losses by layer",
                        xlabel="Epoch",
-                       ylabel="Reconstruction Error",
-                       save_path=f"results/plots/{model_name}_pretraining_errors.png")
+                       ylabel="Reconstruction Loss",
+                       save_path=f"results/plots/{model_name}_pretraining_losses.png")
 
     # Plot weights for each RBM layer in the DBN
     if save_weights:
@@ -143,14 +143,14 @@ def experiment_hidden_dimensions(train_data, val_data=None, hidden_dims=[50, 100
         
     Returns:
     --------
-    errors_by_dim: dict
+    losses_by_dim: dict
         Dictionary mapping hidden dimensions to reconstruction losses
     best_dim: int
-        Hidden dimension with lowest pretraining error
+        Hidden dimension with lowest pretraining loss
     """
     print(f"\n========= Experiment: Varying the hidden dimension =========")
-    errors_by_dim = {}
-    best_error = float('inf')
+    losses_by_dim = {}
+    best_loss = float('inf')
     best_dim = None
 
     print(f"Running experiment with hidden dimensions: {hidden_dims}")
@@ -178,18 +178,18 @@ def experiment_hidden_dimensions(train_data, val_data=None, hidden_dims=[50, 100
             plot=False
         )
         
-        # Store pretraining errors if available
-        if hasattr(dbn_dim, 'pretrain_errors') and dbn_dim.pretrain_errors:
-            final_error = dbn_dim.pretrain_errors[-1]
-            errors_by_dim[dim] = dbn_dim.pretrain_errors
+        # Store pretraining losses if available
+        if hasattr(dbn_dim, 'pretrain_losses') and dbn_dim.pretrain_losses:
+            final_loss = dbn_dim.pretrain_losses[-1][-1]
+            losses_by_dim[dim] = dbn_dim.pretrain_losses
             
-            # Check if this is the best model based on final error
-            if final_error < best_error:
-                best_error = final_error
+            # Check if this is the best model based on final loss
+            if final_loss < best_loss:
+                best_loss = final_loss
                 best_dim = dim
 
-    print(f"Best hidden dimension: {best_dim} with pretraining error: {best_error:.6f}")
-    return errors_by_dim, best_dim
+    print(f"Best hidden dimension: {best_dim} with pretraining loss: {best_loss:.6f}")
+    return losses_by_dim, best_dim
 
 def experiment_number_of_layers(train_data, val_data=None, num_layers=[1, 2, 3, 4], hidden_size=100,
                              nb_epochs=100, batch_size=10, learning_rate=0.1, k=1, chars=None):
@@ -213,14 +213,14 @@ def experiment_number_of_layers(train_data, val_data=None, num_layers=[1, 2, 3, 
         
     Returns:
     --------
-    errors_by_layers: dict
+    losses_by_layers: dict
         Dictionary mapping number of layers to reconstruction losses
     best_num_layers: int
-        Number of layers with lowest pretraining error
+        Number of layers with lowest pretraining loss
     """
     print("\n========= Experiment: Varying the number of hidden layers =========")
-    errors_by_layers = {}
-    best_error = float('inf')
+    losses_by_layers = {}
+    best_loss = float('inf')
     best_num_layers = None
 
     print(f"Running experiment with number of layers: {num_layers}")
@@ -249,18 +249,18 @@ def experiment_number_of_layers(train_data, val_data=None, num_layers=[1, 2, 3, 
             plot=False
         )
         
-        # Store pretraining errors if available
-        if hasattr(dbn_layers, 'pretrain_errors') and dbn_layers.pretrain_errors:
-            final_error = dbn_layers.pretrain_errors[-1]
-            errors_by_layers[n_layers] = dbn_layers.pretrain_errors
+        # Store pretraining losses if available
+        if hasattr(dbn_layers, 'pretrain_losses') and dbn_layers.pretrain_losses:
+            final_loss = dbn_layers.pretrain_losses[-1][-1]
+            losses_by_layers[n_layers] = dbn_layers.pretrain_losses
             
-            # Check if this is the best model based on final error
-            if final_error < best_error:
-                best_error = final_error
+            # Check if this is the best model based on final loss
+            if final_loss < best_loss:
+                best_loss = final_loss
                 best_num_layers = n_layers
 
-    print(f"Best number of layers: {best_num_layers} with pretraining error: {best_error:.6f}")
-    return errors_by_layers, best_num_layers
+    print(f"Best number of layers: {best_num_layers} with pretraining loss: {best_loss:.6f}")
+    return losses_by_layers, best_num_layers
 
 def experiment_characters(char_sets, layer_sizes=None, nb_epochs=100, batch_size=10, 
                         learning_rate=0.1, k=1):
@@ -276,11 +276,11 @@ def experiment_characters(char_sets, layer_sizes=None, nb_epochs=100, batch_size
         
     Returns:
     --------
-    errors_by_chars: dict
-        Dictionary mapping character sets to pretraining errors
+    losses_by_chars: dict
+        Dictionary mapping character sets to pretraining losses
     """
     print("\n========= Experiment: Varying the number of characters =========")
-    errors_by_chars = {}
+    losses_by_chars = {}
 
     for char_name, char_set in char_sets.items():
         print(f"\nTraining DBN with characters: {char_name}")
@@ -319,11 +319,11 @@ def experiment_characters(char_sets, layer_sizes=None, nb_epochs=100, batch_size
             plot=False
         )
         
-        # Store pretraining errors if available
-        if hasattr(dbn_chars, 'pretrain_errors') and dbn_chars.pretrain_errors:
-            errors_by_chars[char_name] = dbn_chars.pretrain_errors
+        # Store pretraining losses if available
+        if hasattr(dbn_chars, 'pretrain_losses') and dbn_chars.pretrain_losses:
+            losses_by_chars[char_name] = dbn_chars.pretrain_losses
 
-    return errors_by_chars
+    return losses_by_chars
 
 def experiment_learning_rate(train_data, val_data=None, learning_rates=[0.001, 0.01, 0.05, 0.1], 
                            layer_sizes=None, nb_epochs=100, batch_size=10, k=1, chars=None):
@@ -345,14 +345,14 @@ def experiment_learning_rate(train_data, val_data=None, learning_rates=[0.001, 0
         
     Returns:
     --------
-    errors_by_lr: dict
-        Dictionary mapping learning rates to pretraining errors
+    losses_by_lr: dict
+        Dictionary mapping learning rates to pretraining losses
     best_lr: float
-        Learning rate with lowest pretraining error
+        Learning rate with lowest pretraining loss
     """
     print("\n========= Experiment: Varying the learning rate =========")
-    errors_by_lr = {}
-    best_error = float('inf')
+    losses_by_lr = {}
+    best_loss = float('inf')
     best_lr = None
 
     print(f"Running experiment with learning rates: {learning_rates}")
@@ -380,18 +380,18 @@ def experiment_learning_rate(train_data, val_data=None, learning_rates=[0.001, 0
             plot=False
         )
         
-        # Store pretraining errors if available
-        if hasattr(dbn_lr, 'pretrain_errors') and dbn_lr.pretrain_errors:
-            final_error = dbn_lr.pretrain_errors[-1]
-            errors_by_lr[lr] = dbn_lr.pretrain_errors
+        # Store pretraining losses if available
+        if hasattr(dbn_lr, 'pretrain_losses') and dbn_lr.pretrain_losses:
+            final_loss = dbn_lr.pretrain_losses[-1][-1]
+            losses_by_lr[lr] = dbn_lr.pretrain_losses
             
-            # Check if this is the best model based on final error
-            if final_error < best_error:
-                best_error = final_error
+            # Check if this is the best model based on final loss
+            if final_loss < best_loss:
+                best_loss = final_loss
                 best_lr = lr
 
-    print(f"Best learning rate: {best_lr} with pretraining error: {best_error:.6f}")
-    return errors_by_lr, best_lr
+    print(f"Best learning rate: {best_lr} with pretraining loss: {best_loss:.6f}")
+    return losses_by_lr, best_lr
 
 def experiment_batch_size(train_data, val_data=None, batch_sizes=[5, 10, 20, 50], 
                         layer_sizes=None, nb_epochs=100, learning_rate=0.1, k=1, chars=None):
@@ -413,14 +413,14 @@ def experiment_batch_size(train_data, val_data=None, batch_sizes=[5, 10, 20, 50]
         
     Returns:
     --------
-    errors_by_batch: dict
-        Dictionary mapping batch sizes to pretraining errors
+    losses_by_batch: dict
+        Dictionary mapping batch sizes to pretraining losses
     best_bs: int
-        Batch size with lowest pretraining error
+        Batch size with lowest pretraining loss
     """
     print("\n========= Experiment: Varying the batch size =========")
-    errors_by_batch = {}
-    best_error = float('inf')
+    losses_by_batch = {}
+    best_loss = float('inf')
     best_bs = None
 
     print(f"Running experiment with batch sizes: {batch_sizes}")
@@ -448,18 +448,18 @@ def experiment_batch_size(train_data, val_data=None, batch_sizes=[5, 10, 20, 50]
             plot=False
         )
         
-        # Store pretraining errors if available
-        if hasattr(dbn_bs, 'pretrain_errors') and dbn_bs.pretrain_errors:
-            final_error = dbn_bs.pretrain_errors[-1]
-            errors_by_batch[bs] = dbn_bs.pretrain_errors
+        # Store pretraining losses if available
+        if hasattr(dbn_bs, 'pretrain_losses') and dbn_bs.pretrain_losses:
+            final_loss = dbn_bs.pretrain_losses[-1][-1]
+            losses_by_batch[bs] = dbn_bs.pretrain_losses
             
-            # Check if this is the best model based on final error
-            if final_error < best_error:
-                best_error = final_error
+            # Check if this is the best model based on final loss
+            if final_loss < best_loss:
+                best_loss = final_loss
                 best_bs = bs
 
-    print(f"Best batch size: {best_bs} with pretraining error: {best_error:.6f}")
-    return errors_by_batch, best_bs
+    print(f"Best batch size: {best_bs} with pretraining loss: {best_loss:.6f}")
+    return losses_by_batch, best_bs
 
 def main():
     # Default parameters
@@ -504,7 +504,7 @@ def main():
         learning_rate=learning_rate,
         k=k,
         model_name="dbn_alpha_initial",
-        verbose=True
+        verbose=True,
     )
     
     # Perform experiments to find optimal parameters
