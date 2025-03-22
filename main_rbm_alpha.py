@@ -543,7 +543,7 @@ def main():
 
     # Create train/validation/test splits
     train_data, val_data, test_data, train_labels, val_labels, test_labels = create_data_splits(data, labels)
-
+    
     # Display some random original samples
     print("Displaying original samples:")
     random_indices = np.random.choice(len(train_data), size=10, replace=False)
@@ -551,7 +551,7 @@ def main():
     random_labels = train_labels[random_indices]
     display_binary_images(random_samples, n_cols=5, figsize=(10, 5), 
                          titles=[f"Character: {label}" for label in random_labels])
-
+    
     # Train initial RBM with default parameters
     print("\n========= Initial RBM Training with Default Parameters =========")
     rbm_initial = train_rbm(
@@ -614,8 +614,8 @@ def main():
         "2-4": [2, 3, 4],  # Three characters
         "2-6": [2, 3, 4, 5, 6],  # Five characters
         "0-9": list(range(10)),  # Ten characters
-        "0-9;A-J": list(range(20)),  # Twenty characters
-        "all_chars": list(range(36))  # All thirty-six characters
+        #"0-9;A-J": list(range(20)),  # Twenty characters
+        #"all_chars": list(range(36))  # All thirty-six characters
     }
     experiment_characters(
         char_sets=char_sets,
@@ -625,7 +625,7 @@ def main():
         learning_rate=learning_rate,
         k=k
     )
-
+    
     # Train final model with best parameters
     print("\n========= Final RBM Training with Best Parameters =========")
     print(f"Using best parameters: hidden units={best_hidden}, learning rate={best_lr}, batch size={best_bs}")
