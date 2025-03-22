@@ -58,8 +58,57 @@ def plot_losses(losses, title="Training Loss", xlabel="Epoch", ylabel="Loss",
     
     return fig
 
-def plot_comparison(x_values, pretrained_test_errors, random_test_errors, 
-                   pretrained_train_errors=None, random_train_errors=None,
+def plot_comparison_losses(losses_dict, xlabel="Epoch", ylabel="Loss", 
+                         title="Comparison of Losses", label_prefix="", 
+                         figsize=(12, 6), save_path=None):
+    """
+    Plot multiple loss curves for comparison from experiment results.
+    
+    Parameters:
+    -----------
+    losses_dict: dict
+        Dictionary mapping configuration values to loss curves
+        Example: {50: [losses for hidden=50], 100: [losses for hidden=100], ...}
+    xlabel: str
+        X-axis label
+    ylabel: str
+        Y-axis label
+    title: str
+        Plot title
+    label_prefix: str
+        Prefix for legend labels (e.g., "Hidden Units: ", "Learning Rate: ")
+    figsize: tuple
+        Figure size as (width, height)
+    save_path: str, optional
+        Path to save the figure
+        
+    Returns:
+    --------
+    fig: matplotlib Figure object
+        The created figure (for further manipulation if needed)
+    """
+    fig = plt.figure(figsize=figsize)
+    
+    for key, losses in losses_dict.items():
+        plt.plot(losses, label=f'{label_prefix}{key}')
+    
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+    plt.title(title)
+    plt.legend()
+    plt.grid(True)
+    
+    # Save figure if a path is provided
+    if save_path:
+        plt.savefig(save_path)
+        print(f"Figure saved to {save_path}")
+    
+    plt.close()
+    
+    return fig
+
+def plot_comparison(x_values, pretrained_train_errors, random_train_errors, 
+                   pretrained_test_errors=None, random_test_errors=None,
                    xlabel="", ylabel="", title="", legend_labels=None, 
                    save_path=None):
     """

@@ -60,8 +60,8 @@ class DBN:
         self.lr = lr
         self.decay_rate = decay_rate
         
-        # List to store pretraining errors
-        self.pretrain_errors = []
+        # List to store pretraining losses
+        self.pretrain_losses = []
         
         input_data = data.copy()
         
@@ -77,12 +77,12 @@ class DBN:
                     self.decay_rate,
                     verbose)
             
-            self.pretrain_errors.append(rbm.errors)
+            self.pretrain_losses.append(rbm.losses)
             
             if i < len(self.rbms) - 1:
                 input_data = rbm.transform(input_data)
         
-        return self.pretrain_errors
+        return self.pretrain_losses
     
     def generate_samples(self, n_samples=10, gibbs_steps=200):
         """

@@ -9,7 +9,7 @@ import pickle
 # Dataset Loading Functions
 #===============================================================================
 
-def load_binary_alphadigits(chars=None):
+def load_binary_alphadigits(chars=None, return_labels=False):
     """
     Load Binary AlphaDigits dataset.
     
@@ -18,11 +18,15 @@ def load_binary_alphadigits(chars=None):
     chars: list or None
         List of characters to load (0-9 for digits, 10-35 for uppercase letters)
         If None, load all characters
+    return_labels: bool
+        Whether to return character labels with the data
         
     Returns:
     --------
     data: array-like
         Binary images with shape (n_samples, 20*16)
+    labels: array-like (optional)
+        Character labels corresponding to each sample
     """
     try:
         mat = sio.loadmat('/Users/christopher/Library/CloudStorage/OneDrive-ENSTAParis/ENSTA/3A/Deep Learning II/deep_learning_2/data/binaryalphadigs.mat')
@@ -32,18 +36,31 @@ def load_binary_alphadigits(chars=None):
             chars = list(range(36))
         
         samples = []
+        labels = []
         
         for char_idx in chars:
             for sample in digits[char_idx]:
                 samples.append(sample.flatten())
+                labels.append(char_idx)
                 
-        return np.array(samples)
+        # Convert labels to character representation
+        char_labels = []
+        for label in labels:
+            if label < 10:  # Digits 0-9
+                char_labels.append(str(label))
+            else:  # Letters A-Z (10-35)
+                char_labels.append(chr(ord('A') + label - 10))
+        
+        if return_labels:
+            return np.array(samples), np.array(char_labels)
+        else:
+            return np.array(samples)
     
     except:
         print("Error: Could not load Binary AlphaDigits dataset.")
         print("Please download it from https://www.kaggle.com/datasets/angevalli/binary-alpha-digits")
         print("and place it in /Users/christopher/Library/CloudStorage/OneDrive-ENSTAParis/ENSTA/3A/Deep Learning II/project/data/")
-        return None
+        return (None, None) if return_labels else None
 
 def load_mnist(binarize_threshold=0.5, normalize=True, use_cache=True):
     """

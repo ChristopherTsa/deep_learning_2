@@ -31,8 +31,8 @@ class DNN:
             self.weights.append(np.random.randn(layer_sizes[-2], layer_sizes[-1]) * 0.01)
             self.biases.append(np.zeros(layer_sizes[-1]))
             
-            # Store pretraining errors
-            self.pretrain_errors = dbn.pretrain_errors
+            # Store pretraining losses
+            self.pretrain_losses = dbn.pretrain_losses
             
         else:
             # Random initialization
@@ -145,7 +145,7 @@ class DNN:
         Returns:
         --------
         list
-            Training errors
+            Training losses
         """
         # Set hyperparameters
         self.batch_size = batch_size
@@ -153,8 +153,8 @@ class DNN:
         self.lr = lr
         self.decay_rate = decay_rate
         
-        # List to store errors
-        self.errors = []
+        # List to store losses
+        self.losses = []
         
         # Training the DNN
         for epoch in range(nb_epochs):
@@ -176,21 +176,21 @@ class DNN:
                 activations = self.forward(X_batch)
                 self.backward(activations, y_batch)
 
-            # Compute error
-            train_error = self.cross_entropy_loss(y_train, self.forward(X_train)[-1])
+            # Compute loss
+            train_loss = self.cross_entropy_loss(y_train, self.forward(X_train)[-1])
 
-            # Compute validation error
+            # Compute validation loss
             if X_val is not None and y_val is not None:
-                val_error = self.cross_entropy_loss(y_val, self.forward(X_val)[-1])
+                val_loss = self.cross_entropy_loss(y_val, self.forward(X_val)[-1])
                 if verbose:
-                    print(f"Epoch {epoch+1}/{nb_epochs} - Train error: {train_error:.4f} - Val error: {val_error:.4f}")
-                self.errors.append((train_error, val_error))
+                    print(f"Epoch {epoch+1}/{nb_epochs} - Train loss: {train_loss:.4f} - Val loss: {val_loss:.4f}")
+                self.losses.append((train_loss, val_loss))
             else:
                 if verbose:
-                    print(f"Epoch {epoch+1}/{nb_epochs} - Train Loss: {train_error:.4f}")
-                self.errors.append(train_error)
+                    print(f"Epoch {epoch+1}/{nb_epochs} - Train Loss: {train_loss:.4f}")
+                self.losses.append(train_loss)
 
-        return self.errors
+        return self.losses
 
     def predict(self, X):
         """

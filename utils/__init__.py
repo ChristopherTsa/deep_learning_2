@@ -10,6 +10,7 @@ from .visualization import (
     # Plotting functions
     plot_losses,
     plot_comparison,
+    plot_comparison_losses,
     
     # Visualization functions
     display_binary_images,
@@ -24,6 +25,7 @@ __all__ = [
     # Plotting functions
     'plot_losses',
     'plot_comparison',
+    'plot_comparison_losses',
     
     # Visualization functions
     'display_binary_images',

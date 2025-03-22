@@ -26,6 +26,24 @@ class RBM:
         """Sigmoid activation function."""
         #return 1 / (1 + np.exp(-x))
         return expit(x)
+
+    def reconstruction_loss(self, v0, vk):
+        """
+        Compute the reconstruction loss.
+        
+        Parameters:
+        -----------
+        v0: array-like
+            Input data
+        vk: array-like
+            Reconstructed data
+            
+        Returns:
+        --------
+        float
+            Reconstruction loss
+        """
+        return np.mean((v0 - vk) ** 2)
     
     def sample_hidden(self, v):
         """
@@ -75,6 +93,11 @@ class RBM:
         -----------
         v0: array-like
             Positive phase visible units (input data)
+            
+        Returns:
+        --------
+        float
+            Reconstruction loss
         """
         #First phase
         p_h0, _ = self.sample_hidden(v0)
@@ -102,12 +125,12 @@ class RBM:
         self.a += self.lr * grad_a
         self.b += self.lr * grad_b
         
-        # Compute reconstruction error
-        reconstruction_error = np.mean((v0 - vk) ** 2)
-        return reconstruction_error
+        # Compute and return reconstruction loss
+        return self.reconstruction_loss(v0, vk)
     
     def fit(self,
             data,
+            validation_data=None,
             batch_size=100,
             nb_epochs=100,
             k=1,
@@ -121,6 +144,8 @@ class RBM:
         -----------
         data: array-like
             Training data
+        validation_data: array-like, optional
+            Validation data for monitoring overfitting
         batch_size: int
             Batch size
         nb_epochs: int
@@ -148,8 +173,9 @@ class RBM:
         self.lr = lr
         self.decay_rate = decay_rate
         
-        # List to store training errors
-        self.errors = []
+        # List to store training and validation losses
+        self.losses = []
+        self.val_losses = [] if validation_data is not None else None
         
         # Train the RBM
         for epoch in range(self.nb_epochs):
@@ -157,31 +183,53 @@ class RBM:
             indices = np.random.permutation(self.data_size)
             data_shuffled = data[indices]
             
-            # Initialize epoch error
-            epoch_error = 0
+            # Initialize epoch loss
+            epoch_loss = 0
             batch_count = 0
             
             # Split data into batches
-            batches = np.array_split(data, max(1, self.data_size // self.batch_size))
+            batches = np.array_split(data_shuffled, max(1, self.data_size // self.batch_size))
             
             # Train on batches
             for batch in batches:
-                batch_error = self.contrastive_divergence(batch)
-                epoch_error += batch_error
+                batch_loss = self.contrastive_divergence(batch)
+                epoch_loss += batch_loss
                 batch_count += 1
             
-            # Compute average error
-            epoch_error /= batch_count
-            self.errors.append(epoch_error)
+            # Compute average loss
+            epoch_loss /= batch_count
+            self.losses.append(epoch_loss)
             
-            # Print progress
-            if verbose:
-                print(f"Epoch {epoch + 1}/{self.nb_epochs}: Error {epoch_error:.4f}")
+            # Compute validation loss if validation data is provided
+            if validation_data is not None:
+                # For validation, we only need the reconstruction loss, not parameter updates
+                val_batches = np.array_split(validation_data, max(1, len(validation_data) // self.batch_size))
+                val_loss = 0
+                val_batch_count = 0
+                
+                for val_batch in val_batches:
+                    # Get reconstructions
+                    vk = self.reconstruct(val_batch, gibbs_steps=k)
+                    # Compute and accumulate loss
+                    val_loss += self.reconstruction_loss(val_batch, vk)
+                    val_batch_count += 1
+                
+                # Compute average validation loss
+                val_loss /= val_batch_count
+                self.val_losses.append(val_loss)
+                
+                # Print progress with validation loss
+                if verbose:
+                    print(f"Epoch {epoch + 1}/{self.nb_epochs}: Train Loss {epoch_loss:.4f}, Val Loss {val_loss:.4f}")
+            else:
+                # Print progress without validation loss
+                if verbose:
+                    print(f"Epoch {epoch + 1}/{self.nb_epochs}: Loss {epoch_loss:.4f}")
             
             # Update learning rate
             self.lr = self.lr * self.decay_rate
-            
-        return self.errors
+        
+        return self
     
     def transform(self, data):
         """
@@ -199,6 +247,29 @@ class RBM:
         """
         p_h, _ = self.sample_hidden(data)
         return p_h
+    
+    def reconstruct(self, data, gibbs_steps=1):
+        """
+        Reconstruct data
+        
+        Parameters:
+        -----------
+        data: array-like
+            Input data to reconstruct
+        gibbs_steps: int
+            Number of Gibbs sampling steps
+            
+        Returns:
+        --------
+        array-like
+            Reconstructed data
+        """
+        v = data.copy()
+        for _ in range(gibbs_steps):
+            _, h = self.sample_hidden(v)
+            _, v = self.sample_visible(h)
+        
+        return v
     
     def generate_samples(self, n_samples=10, gibbs_steps=200):
         """
@@ -220,8 +291,6 @@ class RBM:
         samples = np.random.binomial(1, 0.5, (n_samples, self.n_visible))
         
         # Perform Gibbs sampling
-        for _ in range(gibbs_steps):
-            _, h = self.sample_hidden(samples)
-            _ , samples = self.sample_visible(h)
+        samples = self.reconstruct(samples, gibbs_steps)
             
         return samples
