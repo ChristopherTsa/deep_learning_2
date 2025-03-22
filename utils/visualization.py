@@ -61,7 +61,7 @@ def plot_losses(losses, title="Training Loss", xlabel="Epoch", ylabel="Loss",
 def plot_comparison(x_values, pretrained_test_errors, random_test_errors, 
                    pretrained_train_errors=None, random_train_errors=None,
                    xlabel="", ylabel="", title="", legend_labels=None, 
-                   dual_plot=True, save_path=None):
+                   save_path=None):
     """
     Plot comparison between pretrained and randomly initialized network performance.
     
@@ -85,9 +85,6 @@ def plot_comparison(x_values, pretrained_test_errors, random_test_errors,
         Plot title
     legend_labels: list, optional
         Custom labels for the legend
-    dual_plot: bool, default=True
-        If True, generates both a line plot and a bar plot comparison
-        If False, generates only the line plot
     save_path: str, optional
         Path to save the figure. If None, will generate a path based on title
         
@@ -96,93 +93,58 @@ def plot_comparison(x_values, pretrained_test_errors, random_test_errors,
     dict
         Dictionary with paths to saved figures
     """
-    saved_files = {}
-    
-    # Create the line plot
-    plt.figure(figsize=(12, 7))
-    
     # Use consistent colors for each initialization method
     pretrained_color = 'blue'
     random_color = 'red'
+
+    # Create the line plot
+    plt.figure(figsize=(12, 8))
     
-    # Plot test errors with solid lines
-    plt.plot(x_values, pretrained_test_errors, color=pretrained_color, marker='o', linestyle='-', 
-             label=legend_labels[0] if legend_labels else 'Pre-trained (Test)')
-    plt.plot(x_values, random_test_errors, color=random_color, marker='s', linestyle='-', 
-             label=legend_labels[1] if legend_labels else 'Random Init (Test)')
+    # Plot test errors
+    plt.plot(x_values, pretrained_test_errors, color=pretrained_color, linestyle='-', marker='o', 
+                label=legend_labels[0] if legend_labels else 'Pre-trained (Test)')
+    plt.plot(x_values, random_test_errors, color=random_color, linestyle='-', marker='s', 
+                label=legend_labels[1] if legend_labels else 'Random Init (Test)')
     
-    # Plot train errors with dashed lines (if provided)
+    # Plot train errors if provided
     if pretrained_train_errors is not None:
-        plt.plot(x_values, pretrained_train_errors, color=pretrained_color, marker='o', linestyle='--', 
-                 label=legend_labels[2] if legend_labels and len(legend_labels) > 2 else 'Pre-trained (Train)')
+        plt.plot(x_values, pretrained_train_errors, color=pretrained_color, linestyle='--', marker='o', 
+                    label=legend_labels[2] if legend_labels and len(legend_labels) > 2 else 'Pre-trained (Train)')
     
     if random_train_errors is not None:
-        plt.plot(x_values, random_train_errors, color=random_color, marker='s', linestyle='--', 
-                 label=legend_labels[3] if legend_labels and len(legend_labels) > 3 else 'Random Init (Train)')
+        plt.plot(x_values, random_train_errors, color=random_color, linestyle='--', marker='s', 
+                    label=legend_labels[3] if legend_labels and len(legend_labels) > 3 else 'Random Init (Train)')
     
-    plt.title(f"{title} (Line Plot)")
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
-    plt.xticks(x_values)
+    plt.title(f"{title} (Detailed Comparison)")
     plt.grid(True)
     plt.legend()
     
-    # Save line plot
-    line_plot_path = f"{save_path}_line.png" if save_path else f"{title.replace(' ', '_')}_line.png"
-    plt.savefig(line_plot_path)
-    saved_files['line_plot'] = line_plot_path
-    plt.show()
+    # Add data value labels for test errors
+    for i, (x, y1, y2) in enumerate(zip(x_values, pretrained_test_errors, random_test_errors)):
+        plt.annotate(f'{y1:.4f}', (x, y1), textcoords="offset points", 
+                    xytext=(0,10), ha='center')
+        plt.annotate(f'{y2:.4f}', (x, y2), textcoords="offset points", 
+                    xytext=(0,-15), ha='center')
     
-    # Create the bar plot with annotations if dual_plot is True
-    if dual_plot:
-        plt.figure(figsize=(12, 8))
-        
-        # Plot test errors
-        plt.plot(x_values, pretrained_test_errors, color=pretrained_color, linestyle='-', marker='o', 
-                 label=legend_labels[0] if legend_labels else 'Pre-trained (Test)')
-        plt.plot(x_values, random_test_errors, color=random_color, linestyle='-', marker='s', 
-                 label=legend_labels[1] if legend_labels else 'Random Init (Test)')
-        
-        # Plot train errors if provided
-        if pretrained_train_errors is not None:
-            plt.plot(x_values, pretrained_train_errors, color=pretrained_color, linestyle='--', marker='o', 
-                     label=legend_labels[2] if legend_labels and len(legend_labels) > 2 else 'Pre-trained (Train)')
-        
-        if random_train_errors is not None:
-            plt.plot(x_values, random_train_errors, color=random_color, linestyle='--', marker='s', 
-                     label=legend_labels[3] if legend_labels and len(legend_labels) > 3 else 'Random Init (Train)')
-        
-        plt.xlabel(xlabel)
-        plt.ylabel(ylabel)
-        plt.title(f"{title} (Detailed Comparison)")
-        plt.grid(True)
-        plt.legend()
-        
-        # Add data value labels for test errors
-        for i, (x, y1, y2) in enumerate(zip(x_values, pretrained_test_errors, random_test_errors)):
+    # Add data value labels for train errors (if provided)
+    if pretrained_train_errors is not None and random_train_errors is not None:
+        for i, (x, y1, y2) in enumerate(zip(x_values, pretrained_train_errors, random_train_errors)):
             plt.annotate(f'{y1:.4f}', (x, y1), textcoords="offset points", 
                         xytext=(0,10), ha='center')
             plt.annotate(f'{y2:.4f}', (x, y2), textcoords="offset points", 
                         xytext=(0,-15), ha='center')
-        
-        # Add data value labels for train errors (if provided)
-        if pretrained_train_errors is not None and random_train_errors is not None:
-            for i, (x, y1, y2) in enumerate(zip(x_values, pretrained_train_errors, random_train_errors)):
-                plt.annotate(f'{y1:.4f}', (x, y1), textcoords="offset points", 
-                            xytext=(0,10), ha='center')
-                plt.annotate(f'{y2:.4f}', (x, y2), textcoords="offset points", 
-                            xytext=(0,-15), ha='center')
-        
-        plt.tight_layout()
-        
-        # Save detail plot
-        detail_plot_path = f"{save_path}_detail.png" if save_path else f"{title.replace(' ', '_')}_detail.png"
-        plt.savefig(detail_plot_path)
-        saved_files['detail_plot'] = detail_plot_path
-        plt.show()
     
-    print(f"Plots for {title} saved successfully.")
-    return saved_files
+    plt.tight_layout()
+    
+    # Save detail plot
+    plot_path = f"{save_path}.png" if save_path else f"{title.replace(' ', '_')}.png"
+    plt.savefig(plot_path)
+    plt.show()
+    
+    print(f"Plot for {title} saved successfully.")
+
 
 #===============================================================================
 # Visualization Functions
