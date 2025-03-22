@@ -1,10 +1,6 @@
 import numpy as np
 from scipy.special import expit, softmax
-
-def xavier_init(fan_in, fan_out):
-    """Xavier weight initialization."""
-    limit = np.sqrt(6 / (fan_in + fan_out))
-    return np.random.uniform(-limit, limit, (fan_in, fan_out))
+from sklearn.metrics import log_loss
 
 class DNN:
     def __init__(self, layer_sizes, dbn=None):
@@ -18,40 +14,47 @@ class DNN:
         dbn: DBN, optional
             A trained Deep Belief Network for weight initialization
         """
+        # Store layer sizes
         self.layer_sizes = layer_sizes
+        
+        # Initialize weights and biases
         self.weights = []
         self.biases = []
 
         if dbn:
-            # Initialize weights and biases from the DBN
+            # Weight and bias initialization from DBN
             for rbm in dbn.rbms:
                 self.weights.append(rbm.W.copy())
                 self.biases.append(rbm.b.copy())
-            # Add the final layer for classification
-            self.weights.append(xavier_init(layer_sizes[-2], layer_sizes[-1]))
+            
+            # Add final layer weights and biases
+            self.weights.append(np.random.randn(layer_sizes[-2], layer_sizes[-1]) * 0.01)
             self.biases.append(np.zeros(layer_sizes[-1]))
+            
+            # Store pretraining errors
+            self.pretrain_errors = dbn.pretrain_errors
+            
         else:
-            # True random initialization if no DBN provided
+            # Random initialization
             for i in range(len(layer_sizes) - 1):
-                # Use small random values from normal distribution
-                self.weights.append(0.01 * np.random.randn(layer_sizes[i], layer_sizes[i + 1]))
+                self.weights.append(np.random.randn(layer_sizes[i], layer_sizes[i + 1]) * 0.01)
                 self.biases.append(np.zeros(layer_sizes[i + 1]))
 
     def softmax(self, z):
         """Softmax activation function with numerical stability."""
-        # Added clipping to prevent overflow
-        z_clipped = np.clip(z, -500, 500)
-        return softmax(z_clipped, axis=1)
+        #exp_z = np.exp(z - np.max(z, axis=1, keepdims=True))
+        #return exp_z / np.sum(exp_z, axis=1, keepdims=True)
+        return softmax(z, axis=1)
 
     def sigmoid(self, z):
         """Sigmoid activation function with numerical stability."""
-        # Clip values to prevent overflow
-        z_clipped = np.clip(z, -500, 500)
-        return expit(z_clipped)  # Using SciPy's optimized implementation
+        #return 1 / (1 + np.exp(-z))
+        return expit(z)
 
     def cross_entropy_loss(self, y_true, y_pred):
         """Cross-entropy loss function."""
-        return -np.mean(np.sum(y_true * np.log(y_pred + 1e-8), axis=1))
+        #return -np.mean(np.sum(y_true * np.log(y_pred + 1e-8), axis=1))
+        return log_loss(y_true, y_pred)
 
     def forward(self, X):
         """
@@ -68,26 +71,18 @@ class DNN:
             List of activations at each layer
         """
         activations = [X]
-        # Use current layer output directly without copying
-        layer_output = X
         
+        # Pass through hidden layers
         for W, b in zip(self.weights[:-1], self.biases[:-1]):
-            # More efficient matrix operations with numerical stability
-            z = layer_output @ W + b
-            # Check for potential overflow values
-            if np.max(np.abs(z)) > 500:
-                z = np.clip(z, -500, 500)
-            layer_output = self.sigmoid(z)
-            activations.append(layer_output)
+            X = self.sigmoid(X @ W + b)
+            activations.append(X)
         
-        # Last layer with softmax - optimize computation
-        logits = layer_output @ self.weights[-1] + self.biases[-1]
-        if np.max(np.abs(logits)) > 500:
-            logits = np.clip(logits, -500, 500)
+        # Logits for final layer
+        logits = X @ self.weights[-1] + self.biases[-1]
         activations.append(self.softmax(logits))
         return activations
 
-    def backward(self, activations, y_true, lr, reg_lambda=0.0, momentum=0.0):
+    def backward(self, activations, y_true):
         """
         Backward pass for gradient computation and weight updates.
         
@@ -97,56 +92,32 @@ class DNN:
             Activations from forward pass
         y_true: array-like
             True labels (one-hot encoded)
-        lr: float
-            Learning rate
-        reg_lambda: float
-            L2 regularization parameter
-        momentum: float
-            Momentum coefficient for weight updates
         """
-        # Compute output layer error - optimize vector operations
         deltas = [activations[-1] - y_true]
-        batch_size = y_true.shape[0]
 
-        # Calculate gradients for hidden layers - optimize backpropagation
+        # Compute deltas for hidden layers
         for i in range(len(self.weights) - 1, 0, -1):
-            # More efficient calculation of deltas with gradient clipping
             delta = deltas[0] @ self.weights[i].T * activations[i] * (1 - activations[i])
-            # Clip gradients to prevent exploding gradients
-            delta = np.clip(delta, -1.0, 1.0)
             deltas.insert(0, delta)
 
-        # Initialize velocity if not already done
-        if not hasattr(self, 'velocity_W'):
-            self.velocity_W = [np.zeros_like(w) for w in self.weights]
-            self.velocity_b = [np.zeros_like(b) for b in self.biases]
-
-        # Update weights and biases with momentum - optimize calculations
+        # Update weights and biases
         for i in range(len(self.weights)):
-            # More efficient gradient computation
-            grad_W = activations[i].T @ deltas[i] / batch_size
+            grad_W = activations[i].T @ deltas[i] / y_true.shape[0]
             grad_b = np.mean(deltas[i], axis=0)
             
-            # Add L2 regularization penalty
-            if reg_lambda > 0:
-                grad_W += reg_lambda * self.weights[i]
-            
-            # Clip gradients to prevent exploding gradients
-            grad_W = np.clip(grad_W, -1.0, 1.0)
-            grad_b = np.clip(grad_b, -1.0, 1.0)
-            
-            # Apply momentum with optimized updates
-            self.velocity_W[i] = momentum * self.velocity_W[i] - lr * grad_W
-            self.velocity_b[i] = momentum * self.velocity_b[i] - lr * grad_b
-            
-            # Update weights and biases
-            self.weights[i] += self.velocity_W[i]
-            self.biases[i] += self.velocity_b[i]
+            self.weights[i] -= self.lr * grad_W
+            self.biases[i] -= self.lr * grad_b
 
-    def fit(self, X_train, y_train, X_val=None, y_val=None, nb_epochs=10, batch_size=100,
-            lr=0.01, decay_rate=1.0, reg_lambda=0.0, verbose=True, momentum=0.0,
-            early_stopping=False, patience=10, min_delta=0.001, momentum_schedule=None,
-            clip_gradient=1.0):
+    def fit(self,
+            X_train,
+            y_train,
+            X_val=None,
+            y_val=None,
+            batch_size=100,
+            nb_epochs=200,
+            lr=0.1,
+            decay_rate=1.0,
+            verbose=True):
         """
         Train the neural network.
         
@@ -160,104 +131,66 @@ class DNN:
             Validation data
         y_val: array-like, optional
             Validation labels (one-hot encoded)
-        nb_epochs: int
-            Number of epochs
         batch_size: int
             Batch size
+        nb_epochs: int
+            Number of epochs
         lr: float
             Initial learning rate
         decay_rate: float
             Learning rate decay rate
-        reg_lambda: float
-            L2 regularization parameter
         verbose: bool
             Whether to print progress
-        momentum: float
-            Initial momentum coefficient
-        early_stopping: bool
-            Whether to use early stopping
-        patience: int
-            Number of epochs to wait for improvement before stopping
-        min_delta: float
-            Minimum change to qualify as improvement
-        momentum_schedule: dict
-            Dictionary mapping epoch numbers to momentum values
-        clip_gradient: float
-            Value to clip gradients during training to prevent overflow
             
         Returns:
         --------
         list
-            Training history
+            Training errors
         """
-        history = []
-        initial_lr = lr
-        current_momentum = momentum
+        # Set hyperparameters
+        self.batch_size = batch_size
+        self.nb_epochs = nb_epochs
+        self.lr = lr
+        self.decay_rate = decay_rate
         
-        # Early stopping variables
-        best_val_loss = float('inf')
-        wait = 0
-        best_weights = None
-        best_biases = None
+        # List to store errors
+        self.errors = []
         
+        # Training the DNN
         for epoch in range(nb_epochs):
-            # Update momentum according to schedule if provided
-            if momentum_schedule and epoch in momentum_schedule:
-                current_momentum = momentum_schedule[epoch]
-                if verbose:
-                    print(f"Epoch {epoch+1}: Updating momentum to {current_momentum}")
-                
-            # Apply learning rate decay
-            current_lr = initial_lr * (decay_rate ** epoch)
+            # Learning rate schedule
+            self.lr = self.lr * self.decay_rate
             
-            # Shuffle data
+            # Shuffle training data
             indices = np.arange(X_train.shape[0])
             np.random.shuffle(indices)
-            X_train = X_train[indices]
-            y_train = y_train[indices]
+            X_train_shuffled = X_train[indices]
+            y_train_shuffled = y_train[indices]
 
-            # Split into mini-batches
-            for i in range(0, X_train.shape[0], batch_size):
-                X_batch = X_train[i:i+batch_size]
-                y_batch = y_train[i:i+batch_size]
-
+            # Divide into mini-batches
+            X_batches = np.array_split(X_train_shuffled, range(batch_size, X_train.shape[0], batch_size))
+            y_batches = np.array_split(y_train_shuffled, range(batch_size, y_train.shape[0], batch_size))
+            
+            # Train on mini-batches
+            for X_batch, y_batch in zip(X_batches, y_batches):
                 activations = self.forward(X_batch)
-                self.backward(activations, y_batch, current_lr, reg_lambda, current_momentum)
+                self.backward(activations, y_batch)
 
-            # Calculate loss on training set
-            train_loss = self.cross_entropy_loss(y_train, self.forward(X_train)[-1])
+            # Compute error
+            train_error = self.cross_entropy_loss(y_train, self.forward(X_train)[-1])
 
+            # Compute validation error
             if X_val is not None and y_val is not None:
-                val_loss = self.cross_entropy_loss(y_val, self.forward(X_val)[-1])
-                history.append((train_loss, val_loss))
-                
+                val_error = self.cross_entropy_loss(y_val, self.forward(X_val)[-1])
                 if verbose:
-                    print(f"Epoch {epoch+1}/{nb_epochs} - Train Loss: {train_loss:.4f} - Val Loss: {val_loss:.4f}")
-                
-                # Early stopping logic
-                if early_stopping:
-                    if val_loss < best_val_loss - min_delta:
-                        best_val_loss = val_loss
-                        wait = 0
-                        # Save best weights
-                        best_weights = [w.copy() for w in self.weights]
-                        best_biases = [b.copy() for b in self.biases]
-                    else:
-                        wait += 1
-                        if wait >= patience:
-                            if verbose:
-                                print(f"Early stopping at epoch {epoch+1}")
-                            # Restore best weights
-                            if best_weights is not None:
-                                self.weights = best_weights
-                                self.biases = best_biases
-                            break
+                    print(f"Epoch {epoch+1}/{nb_epochs} - Train error: {train_error:.4f} - Val error: {val_error:.4f}")
+                self.errors.append((train_error, val_error))
             else:
                 if verbose:
-                    print(f"Epoch {epoch+1}/{nb_epochs} - Train Loss: {train_loss:.4f}")
-                history.append(train_loss)
+                    print(f"Epoch {epoch+1}/{nb_epochs} - Train Loss: {train_error:.4f}")
+                self.errors.append(train_error)
 
-        return history
+        return self.errors
 
     def predict(self, X):
         """

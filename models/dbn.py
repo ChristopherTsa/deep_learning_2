@@ -12,17 +12,23 @@ class DBN:
         layer_sizes: list
             List of layer sizes [visible_size, hidden1_size, ..., hiddenN_size]
         """
+        # Store layer sizes
         self.layer_sizes = layer_sizes
+        
+        # Create RBMs for each pair of layers
         self.rbms = [
             RBM(layer_sizes[i], layer_sizes[i+1]) 
             for i in range(len(layer_sizes)-1)
         ]
-        self.trained = False
-        self.pretrain_errors = []
 
-    def fit(self, data, nb_epochs=10, batch_size=100, lr=0.01, k=1,
-            momentum=0.0, weight_decay=0.0, l1_reg=0.0, decay_rate=1.0, verbose=True,
-            momentum_schedule=None):
+    def fit(self,
+            data,
+            batch_size=100,
+            nb_epochs=100,
+            k=1,
+            lr=0.1,
+            decay_rate=1.0,
+            verbose=True):
         """
         Train the DBN using greedy layer-wise pretraining.
         
@@ -30,108 +36,55 @@ class DBN:
         -----------
         data: array-like
             Training data
-        nb_epochs: int
-            Number of epochs per layer
         batch_size: int
             Batch size
-        lr: float
-            Learning rate
+        nb_epochs: int
+            Number of epochs per layer
         k: int
             Number of Gibbs sampling steps
-        momentum: float
-            Initial momentum coefficient
-        weight_decay: float
-            L2 regularization parameter
-        l1_reg: float
-            L1 regularization parameter
+        lr: float
+            Learning rate
         decay_rate: float
             Learning rate decay rate
         verbose: bool
             Whether to print progress
-        momentum_schedule: dict, optional
-            Dictionary with epoch number as key and new momentum value as value
-            
+        
         Returns:
         --------
         self
         """
-        self.trained = True
-        # Avoid unnecessary copy - use data directly when possible
-        input_data = data
+        # Set hyperparameters
+        self.batch_size = batch_size
+        self.nb_epochs = nb_epochs
+        self.k = k
+        self.lr = lr
+        self.decay_rate = decay_rate
+        
+        # List to store pretraining errors
+        self.pretrain_errors = []
+        
+        input_data = data.copy()
         
         for i, rbm in enumerate(self.rbms):
-            print(f"Pretraining layer {i+1}/{len(self.rbms)}...")
-            rbm.fit(input_data, nb_epochs, batch_size, lr, k,
-                    momentum, weight_decay, l1_reg, decay_rate, verbose,
-                    momentum_schedule=momentum_schedule)
-            self.pretrain_errors.append(rbm.losses)
-            # Transform data to next layer without unnecessary copies
-            input_data = rbm.transform(input_data)
-        return self
-    
-    def transform(self, X):
-        """
-        Transform data through all layers of the DBN.
-        
-        Parameters:
-        -----------
-        X: array-like
-            Input data
-            
-        Returns:
-        --------
-        array-like
-            Transformed data (top-level representation)
-        """
-        # Avoid unnecessary copy
-        hidden = X
-        for rbm in self.rbms:
-            hidden = rbm.transform(hidden)
-        return hidden
+            if verbose:
+                print(f"Pretraining layer {i+1}/{len(self.rbms)}...")
 
-    def predict(self, X):
-        """
-        Reconstruct input data by going up through the network and back down.
-        
-        Parameters:
-        -----------
-        X: array-like
-            Input data
+            rbm.fit(input_data,
+                    self.batch_size,
+                    self.nb_epochs,
+                    self.k,
+                    self.lr,
+                    self.decay_rate,
+                    verbose)
             
-        Returns:
-        --------
-        array-like
-            Reconstructed data
-        """
-        # Avoid unnecessary copy
-        hidden = X
-        for rbm in self.rbms:
-            hidden = rbm.transform(hidden)
-        
-        # Come back down through layers
-        for i in reversed(range(len(self.rbms))):
-            p_v, _ = self.rbms[i].sample_visible(hidden)
-            hidden = p_v
-        return hidden
-    
-    def evaluate(self, X):
-        """
-        Evaluate the DBN by computing reconstruction error.
-        
-        Parameters:
-        -----------
-        X: array-like
-            Test data
+            self.pretrain_errors.append(rbm.errors)
             
-        Returns:
-        --------
-        float
-            Mean squared reconstruction error
-        """
-        reconstructions = self.predict(X)
-        return np.mean((X - reconstructions) ** 2)
+            if i < len(self.rbms) - 1:
+                input_data = rbm.transform(input_data)
+        
+        return self.pretrain_errors
     
-    def sample(self, n_samples=10, gibbs_steps=1000):
+    def generate_samples(self, n_samples=10, gibbs_steps=200):
         """
         Generate samples from the DBN.
         
@@ -147,22 +100,24 @@ class DBN:
         array-like
             Generated samples
         """
-        # Start with random visible units at the top layer
-        top_samples = np.random.binomial(1, 0.5, (n_samples, self.layer_sizes[-1]))
+        # Initialize with random samples from the top layer
+        h_samples = np.random.binomial(1, 0.5, (n_samples, self.layer_sizes[-1]))
+        
+        # Get the top-level RBM
+        top_rbm = self.rbms[-1]
+        
+        # Perform Gibbs sampling at the top level
+        for _ in range(gibbs_steps):
+            _, v_samples = top_rbm.sample_visible(h_samples)
+            _, h_samples = top_rbm.sample_hidden(v_samples)
+        
+        # Start with visible samples from top RBM
+        h_samples = v_samples
         
         # Propagate down through the layers
-        samples = top_samples
-        for i in reversed(range(len(self.rbms))):
-            # Initialize with samples from the layer above
-            h = samples
-            
-            # Perform Gibbs sampling at this layer
-            for _ in range(gibbs_steps):
-                p_v, v = self.rbms[i].sample_visible(h)
-                p_h, h = self.rbms[i].sample_hidden(v)
-            
-            # Keep visible samples for the next layer down
-            p_v, samples = self.rbms[i].sample_visible(h)
+        for i in range(len(self.rbms) - 2, -1, -1):
+            _, v_samples = self.rbms[i].sample_visible(h_samples)
+            h_samples = v_samples
         
         # Return the visible samples from the bottom RBM
-        return samples
+        return v_samples
