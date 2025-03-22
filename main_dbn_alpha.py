@@ -602,9 +602,9 @@ def main():
         k=k,
         chars=chars
     )
-
+    
     # Experiment with batch sizes
-    batch_sizes = [5, 10, 20, 50]
+    batch_sizes = [10, 20, 50]
     _, best_bs = experiment_batch_size(
         train_data=train_data,
         val_data=val_data,

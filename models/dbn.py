@@ -23,6 +23,7 @@ class DBN:
 
     def fit(self,
             data,
+            validation_data=None,
             batch_size=100,
             nb_epochs=100,
             k=1,
@@ -36,6 +37,8 @@ class DBN:
         -----------
         data: array-like
             Training data
+        validation_data: array-like, optional
+            Validation data for monitoring overfitting
         batch_size: int
             Batch size
         nb_epochs: int
@@ -62,14 +65,17 @@ class DBN:
         
         # List to store pretraining losses
         self.pretrain_losses = []
+        self.pretrain_val_losses = [] if validation_data is not None else None
         
         input_data = data.copy()
+        input_val_data = validation_data.copy() if validation_data is not None else None
         
         for i, rbm in enumerate(self.rbms):
             if verbose:
                 print(f"Pretraining layer {i+1}/{len(self.rbms)}...")
 
             rbm.fit(input_data,
+                    input_val_data,
                     self.batch_size,
                     self.nb_epochs,
                     self.k,
@@ -78,11 +84,15 @@ class DBN:
                     verbose)
             
             self.pretrain_losses.append(rbm.losses)
+            if validation_data is not None:
+                self.pretrain_val_losses.append(rbm.val_losses)
             
             if i < len(self.rbms) - 1:
                 input_data = rbm.transform(input_data)
+                if validation_data is not None:
+                    input_val_data = rbm.transform(input_val_data)
         
-        return self.pretrain_losses
+        return self
     
     def generate_samples(self, n_samples=10, gibbs_steps=200):
         """
