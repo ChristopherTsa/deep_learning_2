@@ -150,23 +150,23 @@ def plot_comparison(x_values, pretrained_test_errors, random_test_errors,
     plt.figure(figsize=(12, 8))
     
     # Plot test errors
-    plt.plot(x_values, pretrained_test_errors, color=pretrained_color, linestyle='-', marker='o', 
+    plt.plot(x_values, pretrained_test_errors, color=pretrained_color, linestyle='--', marker='o', 
                 label=legend_labels[0] if legend_labels else 'Pre-trained (Test)')
-    plt.plot(x_values, random_test_errors, color=random_color, linestyle='-', marker='s', 
+    plt.plot(x_values, random_test_errors, color=random_color, linestyle='--', marker='s', 
                 label=legend_labels[1] if legend_labels else 'Random Init (Test)')
     
     # Plot train errors if provided
     if pretrained_train_errors is not None:
-        plt.plot(x_values, pretrained_train_errors, color=pretrained_color, linestyle='--', marker='o', 
+        plt.plot(x_values, pretrained_train_errors, color=pretrained_color, linestyle='-', marker='o', 
                     label=legend_labels[2] if legend_labels and len(legend_labels) > 2 else 'Pre-trained (Train)')
     
     if random_train_errors is not None:
-        plt.plot(x_values, random_train_errors, color=random_color, linestyle='--', marker='s', 
+        plt.plot(x_values, random_train_errors, color=random_color, linestyle='-', marker='s', 
                     label=legend_labels[3] if legend_labels and len(legend_labels) > 3 else 'Random Init (Train)')
     
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
-    plt.title(f"{title} (Detailed Comparison)")
+    plt.title(f"{title}")
     plt.grid(True)
     plt.legend()
     
