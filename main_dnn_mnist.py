@@ -412,7 +412,7 @@ def train_optimal_model(X_train_val, y_train_val_onehot,
     """
     print("\nTraining DNN with optimal configuration and pre-training...")
     # Define the architecture
-    layer_sizes = [784, 500, 500, 10]
+    layer_sizes = [784, 500, 500, 2000, 10]
     
     # Split a small portion for validation during training
     X_train, X_val, y_train, y_val = train_test_split(
@@ -503,9 +503,9 @@ if __name__ == "__main__":
     print(f"Data splits: Train: {X_train.shape[0]}, Validation: {X_val.shape[0]}, Test: {X_test.shape[0]}")
     
     # Run hyperparameter experiments using train and validation sets
-    #results = run_hyperparameter_experiments(X_train, y_train_onehot, X_val, y_val_onehot)
+    results = run_hyperparameter_experiments(X_train, y_train_onehot, X_val, y_val_onehot)
     
     # Train the optimal model on combined train+validation and evaluate on test
     # Set load_pretrained_dbn to True to load a pre-trained DBN instead of training a new one
-    optimal_model = train_optimal_model(X_train_full, y_train_full_onehot, X_test, y_test_onehot,
-                                        load_pretrained_dbn=False)  # Set to True to load a previously trained DBN
+    #optimal_model = train_optimal_model(X_train_full, y_train_full_onehot, X_test, y_test_onehot,
+    #                                    load_pretrained_dbn=False)  # Set to True to load a previously trained DBN
