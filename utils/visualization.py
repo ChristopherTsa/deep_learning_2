@@ -107,8 +107,8 @@ def plot_comparison_losses(losses_dict, xlabel="Epoch", ylabel="Loss",
     
     return fig
 
-def plot_comparison(x_values, pretrained_train_errors, random_train_errors, 
-                   pretrained_test_errors=None, random_test_errors=None,
+def plot_comparison(x_values, pretrained_test_errors, random_test_errors,
+                   pretrained_train_errors=None, random_train_errors=None,
                    xlabel="", ylabel="", title="", legend_labels=None, 
                    save_path=None):
     """
