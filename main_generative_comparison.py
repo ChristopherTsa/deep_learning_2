@@ -7,6 +7,8 @@ import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers, Model, optimizers
 from sklearn.model_selection import train_test_split
+# Add joblib for parallelization
+from joblib import Parallel, delayed
 
 # Import from our own modules
 from models import RBM, DBN
@@ -53,338 +55,227 @@ MODEL_CONFIGS = {
 }
 
 #===============================================================================
-# VAE Implementation
+# VAE Implementation using Standard Keras
 #===============================================================================
 
-class VAE(Model):
-    def __init__(self, encoder_dims, latent_dim, decoder_dims):
-        super(VAE, self).__init__()
-        self.encoder_dims = encoder_dims
-        self.latent_dim = latent_dim
-        self.decoder_dims = decoder_dims
-        
-        # Build the encoder
-        self.encoder_layers = []
-        for dim in encoder_dims[1:]:
-            self.encoder_layers.append(layers.Dense(dim, activation='relu'))
-        
-        # Mean and variance layers
-        self.mean = layers.Dense(latent_dim)
-        self.log_var = layers.Dense(latent_dim)
-        
-        # Build the decoder
-        self.decoder_layers = []
-        for dim in decoder_dims[:-1]:
-            self.decoder_layers.append(layers.Dense(dim, activation='relu'))
-        self.decoder_output = layers.Dense(decoder_dims[-1], activation='sigmoid')
-        
-        # Compile the model
-        self.compile(optimizer=optimizers.Adam(1e-3))
+def build_vae(encoder_dims, latent_dim, decoder_dims):
+    """Build VAE using a simpler, more reliable approach with subclassing."""
+    class Sampling(layers.Layer):
+        """Sampling layer for VAE."""
+        def call(self, inputs):
+            z_mean, z_log_var = inputs
+            batch = tf.shape(z_mean)[0]
+            dim = tf.shape(z_mean)[1]
+            epsilon = tf.random.normal(shape=(batch, dim))
+            return z_mean + tf.exp(0.5 * z_log_var) * epsilon
     
-    def encode(self, x):
-        # Pass through encoder layers
-        for layer in self.encoder_layers:
-            x = layer(x)
-        
-        # Get mean and log variance
-        mean = self.mean(x)
-        log_var = self.log_var(x)
-        
-        return mean, log_var
-    
-    def reparameterize(self, mean, log_var):
-        batch = tf.shape(mean)[0]
-        dim = tf.shape(mean)[1]
-        epsilon = tf.random.normal(shape=(batch, dim))
-        return mean + tf.exp(0.5 * log_var) * epsilon
-    
-    def decode(self, z):
-        # Pass through decoder layers
-        x = z
-        for layer in self.decoder_layers:
-            x = layer(x)
-        
-        # Final output layer
-        return self.decoder_output(x)
-    
-    def call(self, x):
-        # Encode
-        mean, log_var = self.encode(x)
-        
-        # Sample latent vector
-        z = self.reparameterize(mean, log_var)
-        
-        # Decode
-        reconstructed = self.decode(z)
-        
-        # Add loss
-        kl_loss = -0.5 * tf.reduce_sum(1 + log_var - tf.square(mean) - tf.exp(log_var), axis=1)
-        self.add_loss(tf.reduce_mean(kl_loss))
-        
-        return reconstructed
-    
-    def generate_samples(self, n_samples):
-        # Sample from latent space
-        z = tf.random.normal(shape=(n_samples, self.latent_dim))
-        
-        # Decode
-        samples = self.decode(z)
-        
-        return samples.numpy()
-    
-    def fit(self, x_train, x_val=None, epochs=100, batch_size=128, verbose=1):
-        # Create dataset
-        train_dataset = tf.data.Dataset.from_tensor_slices(x_train)
-        train_dataset = train_dataset.shuffle(buffer_size=1024).batch(batch_size)
-        
-        val_dataset = None
-        if x_val is not None:
-            val_dataset = tf.data.Dataset.from_tensor_slices(x_val)
-            val_dataset = val_dataset.batch(batch_size)
-        
-        # Custom training loop
-        self.losses = []
-        self.val_losses = [] if x_val is not None else None
-        
-        for epoch in range(epochs):
-            start_time = time()
+    class VAE(keras.Model):
+        """Variational Autoencoder model."""
+        def __init__(self, encoder_dims, latent_dim, decoder_dims):
+            super(VAE, self).__init__()
+            self.latent_dim = latent_dim
             
-            # Training
-            epoch_loss = 0
-            num_batches = 0
+            # Build encoder
+            self.encoder_layers = []
+            for dim in encoder_dims[1:]:
+                self.encoder_layers.append(layers.Dense(dim, activation='relu'))
             
-            for x_batch in train_dataset:
-                with tf.GradientTape() as tape:
-                    # Forward pass
-                    reconstructed = self(x_batch)
-                    
-                    # Reconstruction loss
-                    reconstruction_loss = tf.reduce_mean(
-                        tf.reduce_sum(
-                            keras.losses.binary_crossentropy(x_batch, reconstructed),
-                            axis=(1)
-                        )
-                    )
-                    
-                    # Total loss
-                    total_loss = reconstruction_loss + sum(self.losses) / x_batch.shape[0]
-                
-                # Backpropagation
-                grads = tape.gradient(total_loss, self.trainable_variables)
-                self.optimizer.apply_gradients(zip(grads, self.trainable_variables))
-                
-                epoch_loss += total_loss.numpy()
-                num_batches += 1
+            self.z_mean = layers.Dense(latent_dim)
+            self.z_log_var = layers.Dense(latent_dim)
+            self.sampling = Sampling()
             
-            epoch_loss /= num_batches
-            self.losses.append(epoch_loss)
+            # Build decoder
+            self.decoder_layers = []
+            for dim in decoder_dims[:-1]:
+                self.decoder_layers.append(layers.Dense(dim, activation='relu'))
+            self.decoder_output = layers.Dense(decoder_dims[-1], activation='sigmoid')
             
-            # Validation
-            if val_dataset:
-                val_loss = 0
-                val_batches = 0
-                
-                for x_val_batch in val_dataset:
-                    # Forward pass
-                    reconstructed = self(x_val_batch)
-                    
-                    # Reconstruction loss
-                    reconstruction_loss = tf.reduce_mean(
-                        tf.reduce_sum(
-                            keras.losses.binary_crossentropy(x_val_batch, reconstructed),
-                            axis=(1)
-                        )
-                    )
-                    
-                    # Total loss
-                    total_loss = reconstruction_loss + sum(self.losses) / x_val_batch.shape[0]
-                    
-                    val_loss += total_loss.numpy()
-                    val_batches += 1
-                
-                val_loss /= val_batches
-                self.val_losses.append(val_loss)
-                
-                if verbose:
-                    print(f"Epoch {epoch+1}/{epochs} - {time() - start_time:.2f}s - loss: {epoch_loss:.4f} - val_loss: {val_loss:.4f}")
-            else:
-                if verbose:
-                    print(f"Epoch {epoch+1}/{epochs} - {time() - start_time:.2f}s - loss: {epoch_loss:.4f}")
+            # Optimizer
+            self.optimizer = keras.optimizers.Adam(1e-3)
+            
+            # Track loss
+            self.total_loss_tracker = keras.metrics.Mean(name="total_loss")
+            self.reconstruction_loss_tracker = keras.metrics.Mean(name="reconstruction_loss")
+            self.kl_loss_tracker = keras.metrics.Mean(name="kl_loss")
         
-        return self.losses
+        @property
+        def metrics(self):
+            return [
+                self.total_loss_tracker,
+                self.reconstruction_loss_tracker,
+                self.kl_loss_tracker,
+            ]
+        
+        def encode(self, x):
+            for layer in self.encoder_layers:
+                x = layer(x)
+            z_mean = self.z_mean(x)
+            z_log_var = self.z_log_var(x)
+            z = self.sampling([z_mean, z_log_var])
+            return z_mean, z_log_var, z
+        
+        def decode(self, z):
+            x = z
+            for layer in self.decoder_layers:
+                x = layer(x)
+            return self.decoder_output(x)
+        
+        def call(self, inputs):
+            z_mean, z_log_var, z = self.encode(inputs)
+            reconstructed = self.decode(z)
+            return reconstructed
+        
+        def train_step(self, data):
+            x = data
+            
+            with tf.GradientTape() as tape:
+                # Forward pass
+                z_mean, z_log_var, z = self.encode(x)
+                reconstruction = self.decode(z)
+                
+                # Compute loss
+                reconstruction_loss = tf.reduce_mean(
+                    keras.losses.binary_crossentropy(x, reconstruction) * encoder_dims[0]
+                )
+                kl_loss = -0.5 * tf.reduce_mean(
+                    1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var)
+                )
+                total_loss = reconstruction_loss + kl_loss
+            
+            # Compute gradients and update weights
+            grads = tape.gradient(total_loss, self.trainable_weights)
+            self.optimizer.apply_gradients(zip(grads, self.trainable_weights))
+            
+            # Update metrics
+            self.total_loss_tracker.update_state(total_loss)
+            self.reconstruction_loss_tracker.update_state(reconstruction_loss)
+            self.kl_loss_tracker.update_state(kl_loss)
+            
+            return {
+                "loss": self.total_loss_tracker.result(),
+                "reconstruction_loss": self.reconstruction_loss_tracker.result(),
+                "kl_loss": self.kl_loss_tracker.result(),
+            }
+        
+        def test_step(self, data):
+            x = data
+            
+            # Forward pass
+            z_mean, z_log_var, z = self.encode(x)
+            reconstruction = self.decode(z)
+            
+            # Compute loss
+            reconstruction_loss = tf.reduce_mean(
+                keras.losses.binary_crossentropy(x, reconstruction) * encoder_dims[0]
+            )
+            kl_loss = -0.5 * tf.reduce_mean(
+                1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var)
+            )
+            total_loss = reconstruction_loss + kl_loss
+            
+            # Update metrics
+            self.total_loss_tracker.update_state(total_loss)
+            self.reconstruction_loss_tracker.update_state(reconstruction_loss)
+            self.kl_loss_tracker.update_state(kl_loss)
+            
+            return {
+                "loss": self.total_loss_tracker.result(),
+                "reconstruction_loss": self.reconstruction_loss_tracker.result(),
+                "kl_loss": self.kl_loss_tracker.result(),
+            }
+        
+        def generate_samples(self, n_samples):
+            """Generate samples from the latent space."""
+            z = tf.random.normal(shape=(n_samples, self.latent_dim))
+            return self.decode(z).numpy()
+    
+    # Instantiate and return the VAE model
+    vae = VAE(encoder_dims, latent_dim, decoder_dims)
+    
+    # Compile the model (not needed for custom training)
+    vae.compile()
+    
+    return vae
 
 #===============================================================================
-# GAN Implementation
+# GAN Implementation using Standard Keras
 #===============================================================================
 
-class GAN:
-    def __init__(self, g_input_dim, g_hidden_dim, g_output_dim, g_depth, 
-                 d_input_dim, d_hidden_dim, d_output_dim, d_depth):
-        self.g_input_dim = g_input_dim
-        self.g_hidden_dim = g_hidden_dim
-        self.g_output_dim = g_output_dim
-        self.g_depth = g_depth
-        
-        self.d_input_dim = d_input_dim
-        self.d_hidden_dim = d_hidden_dim
-        self.d_output_dim = d_output_dim
-        self.d_depth = d_depth
-        
-        # Build generator
-        self.generator = self._build_generator()
-        
-        # Build discriminator
-        self.discriminator = self._build_discriminator()
-        
-        # Build GAN
-        self.gan = self._build_gan()
-        
-        # Compile models
-        self.discriminator.compile(
-            optimizer=optimizers.Adam(1e-4),
-            loss='binary_crossentropy',
-            metrics=['accuracy']
-        )
-        
-        self.gan.compile(
-            optimizer=optimizers.Adam(1e-4),
-            loss='binary_crossentropy'
-        )
+def build_gan(g_input_dim, g_hidden_dim, g_output_dim, g_depth,
+              d_input_dim, d_hidden_dim, d_output_dim, d_depth):
+    """Build GAN models using standard Keras layers."""
+    # Build generator using the functional API
+    generator_input = keras.Input(shape=(g_input_dim,))
+    x = layers.Dense(g_hidden_dim)(generator_input)
+    x = layers.LeakyReLU(negative_slope=0.2)(x)
+    x = layers.BatchNormalization()(x)
     
-    def _build_generator(self):
-        model = keras.Sequential()
-        
-        # First layer
-        model.add(layers.Dense(self.g_hidden_dim, input_dim=self.g_input_dim))
-        model.add(layers.LeakyReLU(alpha=0.2))
-        model.add(layers.BatchNormalization())
-        
-        # Hidden layers
-        hidden_dims = [self.g_hidden_dim * (2**i) for i in range(1, self.g_depth)]
-        for dim in hidden_dims:
-            model.add(layers.Dense(dim))
-            model.add(layers.LeakyReLU(alpha=0.2))
-            model.add(layers.BatchNormalization())
-        
-        # Output layer
-        model.add(layers.Dense(self.g_output_dim, activation='sigmoid'))
-        
-        return model
+    # Hidden layers
+    hidden_dims = [g_hidden_dim * (2**i) for i in range(1, g_depth)]
+    for dim in hidden_dims:
+        x = layers.Dense(dim)(x)
+        x = layers.LeakyReLU(negative_slope=0.2)(x)
+        x = layers.BatchNormalization()(x)
     
-    def _build_discriminator(self):
-        model = keras.Sequential()
-        
-        # First layer
-        model.add(layers.Dense(self.d_hidden_dim, input_dim=self.d_input_dim))
-        model.add(layers.LeakyReLU(alpha=0.2))
-        model.add(layers.Dropout(0.3))
-        
-        # Hidden layers
-        hidden_dims = [self.d_hidden_dim // (2**i) for i in range(1, self.d_depth)]
-        for dim in hidden_dims:
-            model.add(layers.Dense(dim))
-            model.add(layers.LeakyReLU(alpha=0.2))
-            model.add(layers.Dropout(0.3))
-        
-        # Output layer
-        model.add(layers.Dense(self.d_output_dim, activation='sigmoid'))
-        
-        return model
+    # Output layer
+    generator_output = layers.Dense(g_output_dim, activation='sigmoid')(x)
     
-    def _build_gan(self):
-        # Make discriminator not trainable for the GAN model
-        self.discriminator.trainable = False
-        
-        # Connect generator and discriminator
-        model = keras.Sequential()
-        model.add(self.generator)
-        model.add(self.discriminator)
-        
-        return model
+    # Create generator model
+    generator = keras.Model(generator_input, generator_output, name="generator")
     
-    def generate_samples(self, n_samples):
-        # Generate random noise
-        noise = np.random.normal(0, 1, size=(n_samples, self.g_input_dim))
-        
-        # Generate samples
-        samples = self.generator.predict(noise)
-        
-        return samples
+    # Build discriminator using the functional API
+    discriminator_input = keras.Input(shape=(d_input_dim,))
+    x = layers.Dense(d_hidden_dim)(discriminator_input)
+    x = layers.LeakyReLU(negative_slope=0.2)(x)
+    x = layers.Dropout(0.3)(x)
     
-    def fit(self, x_train, x_val=None, epochs=100, batch_size=128, verbose=1):
-        # Create dataset
-        train_dataset = tf.data.Dataset.from_tensor_slices(x_train)
-        train_dataset = train_dataset.shuffle(buffer_size=1024).batch(batch_size)
+    # Hidden layers
+    hidden_dims = [d_hidden_dim // (2**i) for i in range(1, d_depth)]
+    for dim in hidden_dims:
+        x = layers.Dense(dim)(x)
+        x = layers.LeakyReLU(negative_slope=0.2)(x)
+        x = layers.Dropout(0.3)(x)
+    
+    # Output layer
+    discriminator_output = layers.Dense(d_output_dim, activation='sigmoid')(x)
+    
+    # Create discriminator model
+    discriminator = keras.Model(discriminator_input, discriminator_output, name="discriminator")
+    
+    # Compile discriminator
+    discriminator.compile(
+        optimizer=keras.optimizers.Adam(1e-4),
+        loss='binary_crossentropy',
+        metrics=['accuracy']
+    )
+    
+    # Build GAN using functional API
+    gan_input = keras.Input(shape=(g_input_dim,))
+    x = generator(gan_input)
+    # Only when building the composite model, we set discriminator to not trainable
+    discriminator.trainable = False
+    gan_output = discriminator(x)
+    gan = keras.Model(gan_input, gan_output, name="gan")
+    
+    # Compile GAN
+    gan.compile(
+        optimizer=keras.optimizers.Adam(1e-4),
+        loss='binary_crossentropy'
+    )
+    
+    # Create a class-like object with the models and generate_samples method
+    class GANModel:
+        def __init__(self, generator, discriminator, gan):
+            self.generator = generator
+            self.discriminator = discriminator
+            self.gan = gan
+            self.g_input_dim = g_input_dim
         
-        # For tracking progress
-        self.losses = {'d_loss': [], 'g_loss': []}
-        self.val_losses = {'d_loss': [], 'g_loss': []} if x_val is not None else None
-        
-        for epoch in range(epochs):
-            start_time = time()
-            
-            # Training
-            d_epoch_loss = 0
-            g_epoch_loss = 0
-            num_batches = 0
-            
-            for x_batch in train_dataset:
-                batch_size = x_batch.shape[0]
-                
-                # Generate noise
-                noise = np.random.normal(0, 1, size=(batch_size, self.g_input_dim))
-                
-                # Generate fake samples
-                fake_samples = self.generator.predict(noise)
-                
-                # Train discriminator
-                d_loss_real = self.discriminator.train_on_batch(x_batch, np.ones((batch_size, 1)))
-                d_loss_fake = self.discriminator.train_on_batch(fake_samples, np.zeros((batch_size, 1)))
-                d_loss = 0.5 * np.add(d_loss_real[0], d_loss_fake[0])
-                
-                # Train generator
-                noise = np.random.normal(0, 1, size=(batch_size * 2, self.g_input_dim))
-                g_loss = self.gan.train_on_batch(noise, np.ones((batch_size * 2, 1)))
-                
-                d_epoch_loss += d_loss
-                g_epoch_loss += g_loss
-                num_batches += 1
-            
-            d_epoch_loss /= num_batches
-            g_epoch_loss /= num_batches
-            
-            self.losses['d_loss'].append(d_epoch_loss)
-            self.losses['g_loss'].append(g_epoch_loss)
-            
-            # Validation
-            if x_val is not None:
-                val_samples = min(1000, x_val.shape[0])
-                idx = np.random.choice(x_val.shape[0], val_samples, replace=False)
-                x_val_sample = x_val[idx]
-                
-                # Generate fake samples
-                noise = np.random.normal(0, 1, size=(val_samples, self.g_input_dim))
-                fake_samples = self.generator.predict(noise)
-                
-                # Evaluate discriminator
-                d_loss_real = self.discriminator.evaluate(x_val_sample, np.ones((val_samples, 1)), verbose=0)
-                d_loss_fake = self.discriminator.evaluate(fake_samples, np.zeros((val_samples, 1)), verbose=0)
-                d_val_loss = 0.5 * np.add(d_loss_real[0], d_loss_fake[0])
-                
-                # Evaluate generator
-                noise = np.random.normal(0, 1, size=(val_samples * 2, self.g_input_dim))
-                g_val_loss = self.gan.evaluate(noise, np.ones((val_samples * 2, 1)), verbose=0)
-                
-                self.val_losses['d_loss'].append(d_val_loss)
-                self.val_losses['g_loss'].append(g_val_loss)
-                
-                if verbose:
-                    print(f"Epoch {epoch+1}/{epochs} - {time() - start_time:.2f}s - d_loss: {d_epoch_loss:.4f} - g_loss: {g_epoch_loss:.4f} - val_d_loss: {d_val_loss:.4f} - val_g_loss: {g_val_loss:.4f}")
-            else:
-                if verbose:
-                    print(f"Epoch {epoch+1}/{epochs} - {time() - start_time:.2f}s - d_loss: {d_epoch_loss:.4f} - g_loss: {g_epoch_loss:.4f}")
-        
-        return self.losses
+        def generate_samples(self, n_samples):
+            noise = np.random.normal(0, 1, size=(n_samples, self.g_input_dim))
+            return self.generator.predict(noise, verbose=0)
+    
+    return GANModel(generator, discriminator, gan)
 
 #===============================================================================
 # Model Training Functions
@@ -435,46 +326,204 @@ def train_dbn(X_train, X_val=None, config=None, nb_epochs=100, batch_size=100, l
     return dbn
 
 def train_vae(X_train, X_val=None, config=None, nb_epochs=100, batch_size=100, model_name="vae_small"):
-    """Train a VAE model with given configuration."""
+    """Train a VAE model with given configuration using standard Keras."""
     print(f"Training VAE with encoder: {config['encoder_dims']}, latent dim: {config['latent_dim']}, decoder: {config['decoder_dims']}...")
     
-    # Initialize VAE
-    vae = VAE(encoder_dims=config['encoder_dims'], 
-              latent_dim=config['latent_dim'], 
-              decoder_dims=config['decoder_dims'])
+    # Build VAE
+    vae = build_vae(
+        encoder_dims=config['encoder_dims'],
+        latent_dim=config['latent_dim'],
+        decoder_dims=config['decoder_dims']
+    )
     
     # Train the model
-    vae.fit(X_train, X_val, epochs=nb_epochs, batch_size=batch_size, verbose=1)
+    history = vae.fit(
+        X_train,  # For custom training, we only need the input 
+        epochs=nb_epochs,
+        batch_size=batch_size,
+        validation_data=X_val if X_val is not None else None,
+        verbose=1
+    )
     
-    # Save the model
-    model_path = f"results/models/comparison/{model_name}.h5"
-    vae.save_weights(model_path)
+    # Instead of saving weights directly, save generated samples
+    print("Generating and saving samples from VAE...")
+    samples = vae.generate_samples(100)  # Generate more samples than needed
+    
+    # Save samples to a numpy file
+    samples_path = f"results/models/comparison/{model_name}_samples.npy"
+    np.save(samples_path, samples)
+    
+    print(f"VAE samples saved to {samples_path}")
     
     return vae
 
 def train_gan(X_train, X_val=None, config=None, nb_epochs=100, batch_size=100, model_name="gan_small"):
-    """Train a GAN model with given configuration."""
+    """Train a GAN model with given configuration using standard Keras."""
     print(f"Training GAN with generator: {config['g_input_dim']}->{config['g_hidden_dim']}->{config['g_output_dim']} (depth: {config['g_depth']}), "
           f"discriminator: {config['d_input_dim']}->{config['d_hidden_dim']}->{config['d_output_dim']} (depth: {config['d_depth']})...")
     
-    # Initialize GAN
-    gan = GAN(g_input_dim=config['g_input_dim'],
-              g_hidden_dim=config['g_hidden_dim'],
-              g_output_dim=config['g_output_dim'],
-              g_depth=config['g_depth'],
-              d_input_dim=config['d_input_dim'],
-              d_hidden_dim=config['d_hidden_dim'],
-              d_output_dim=config['d_output_dim'],
-              d_depth=config['d_depth'])
+    # Build GAN
+    gan_model = build_gan(
+        g_input_dim=config['g_input_dim'],
+        g_hidden_dim=config['g_hidden_dim'],
+        g_output_dim=config['g_output_dim'],
+        g_depth=config['g_depth'],
+        d_input_dim=config['d_input_dim'],
+        d_hidden_dim=config['d_hidden_dim'],
+        d_output_dim=config['d_output_dim'],
+        d_depth=config['d_depth']
+    )
     
-    # Train the model
-    gan.fit(X_train, X_val, epochs=nb_epochs, batch_size=batch_size, verbose=1)
+    # Train the GAN model
+    d_losses = []
+    g_losses = []
     
-    # Save the models
-    gan.generator.save(f"results/models/comparison/{model_name}_generator.h5")
-    gan.discriminator.save(f"results/models/comparison/{model_name}_discriminator.h5")
+    for epoch in range(nb_epochs):
+        start_time = time()
+        
+        d_epoch_loss = 0
+        g_epoch_loss = 0
+        num_batches = 0
+        
+        # Create dataset and shuffle
+        indices = np.random.permutation(len(X_train))
+        X_shuffled = X_train[indices]
+        
+        # Train in batches
+        for i in range(0, len(X_train), batch_size):
+            # Get batch
+            X_batch = X_shuffled[i:i+batch_size]
+            batch_size_actual = len(X_batch)
+            
+            # Generate fake samples
+            noise = np.random.normal(0, 1, size=(batch_size_actual, config['g_input_dim']))
+            generated_images = gan_model.generator.predict(noise, verbose=0)
+            
+            # IMPROVEMENT 1: Label smoothing - use 0.9 for real and 0.1 for fake instead of 1 and 0
+            # These softer labels make the discriminator less confident and improve training
+            real_labels = 0.9 * np.ones((batch_size_actual, 1))
+            fake_labels = 0.1 * np.ones((batch_size_actual, 1))
+            
+            # IMPROVEMENT 2: Add noise to discriminator inputs to improve robustness
+            # Add small random noise to real and generated samples
+            noise_factor = 0.05
+            X_batch_noisy = X_batch + noise_factor * np.random.normal(0, 1, X_batch.shape)
+            generated_images_noisy = generated_images + noise_factor * np.random.normal(0, 1, generated_images.shape)
+            
+            # Clip values to valid range [0, 1]
+            X_batch_noisy = np.clip(X_batch_noisy, 0.0, 1.0)
+            generated_images_noisy = np.clip(generated_images_noisy, 0.0, 1.0)
+            
+            # Train discriminator on real and fake samples
+            gan_model.discriminator.trainable = True
+            d_loss_real = gan_model.discriminator.train_on_batch(X_batch_noisy, real_labels)[0]
+            d_loss_fake = gan_model.discriminator.train_on_batch(generated_images_noisy, fake_labels)[0]
+            d_loss = 0.5 * (d_loss_real + d_loss_fake)
+            
+            # IMPROVEMENT 3: Train generator multiple times for each discriminator update
+            # This helps prevent the discriminator from becoming too strong
+            gan_model.discriminator.trainable = False
+            gen_iterations = 2  # Train generator twice for each discriminator update
+            g_loss_total = 0
+            
+            for _ in range(gen_iterations):
+                # Generate new noise
+                noise = np.random.normal(0, 1, size=(batch_size_actual, config['g_input_dim']))
+                # Use real labels (1s) for generator training
+                g_labels = np.ones((batch_size_actual, 1))
+                # Train generator
+                g_loss = gan_model.gan.train_on_batch(noise, g_labels)
+                g_loss_total += g_loss
+            
+            g_loss = g_loss_total / gen_iterations
+            
+            # Update epoch losses
+            d_epoch_loss += d_loss
+            g_epoch_loss += g_loss
+            num_batches += 1
+        
+        # Calculate average losses for the epoch
+        d_epoch_loss /= num_batches
+        g_epoch_loss /= num_batches
+        d_losses.append(d_epoch_loss)
+        g_losses.append(g_epoch_loss)
+        
+        # Print progress
+        print(f"Epoch {epoch+1}/{nb_epochs} - {time() - start_time:.2f}s - d_loss: {d_epoch_loss:.4f} - g_loss: {g_epoch_loss:.4f}")
+        
+        # IMPROVEMENT 4: Early stopping based on running averages of losses
+        # If we have enough epochs and losses are diverging, stop
+        if epoch > 10 and len(d_losses) > 5 and len(g_losses) > 5:
+            # Calculate running averages
+            d_avg_recent = np.mean(d_losses[-5:])
+            d_avg_earlier = np.mean(d_losses[-10:-5])
+            g_avg_recent = np.mean(g_losses[-5:])
+            g_avg_earlier = np.mean(g_losses[-10:-5])
+            
+            # Check if losses are diverging badly
+            if (d_avg_recent < 0.1 * d_avg_earlier) or (g_avg_recent > 5 * g_avg_earlier):
+                print("Training appears to be diverging. Stopping early.")
+                break
+        
+        # Validate if validation data is provided
+        if X_val is not None and (epoch + 1) % 5 == 0:  # Validate every 5 epochs
+            val_samples = min(1000, len(X_val))
+            idx = np.random.choice(len(X_val), val_samples, replace=False)
+            X_val_sample = X_val[idx]
+            
+            # Make sure discriminator is trainable for evaluation
+            gan_model.discriminator.trainable = True
+            
+            # Generate fake samples
+            noise = np.random.normal(0, 1, size=(val_samples, config['g_input_dim']))
+            fake_samples = gan_model.generator.predict(noise, verbose=0)
+            
+            # Evaluate discriminator
+            d_loss_real = gan_model.discriminator.evaluate(X_val_sample, np.ones((val_samples, 1)), verbose=0)[0]
+            d_loss_fake = gan_model.discriminator.evaluate(fake_samples, np.zeros((val_samples, 1)), verbose=0)[0]
+            d_val_loss = 0.5 * (d_loss_real + d_loss_fake)
+            
+            # Print validation loss
+            print(f"  Validation - d_loss: {d_val_loss:.4f}")
     
-    return gan
+    # Save best samples at different points during training
+    # Generate and save 100 samples
+    best_samples = None
+    best_score = float('inf')
+    
+    # Try generating samples at different noise scales
+    for scale in [0.8, 1.0, 1.2]:
+        noise = np.random.normal(0, scale, size=(100, config['g_input_dim']))
+        samples = gan_model.generator.predict(noise, verbose=0)
+        
+        # Simple diversity score: use standard deviation as a proxy for diversity
+        diversity_score = np.std(samples)
+        
+        # Update best samples if these have more diversity
+        if diversity_score > best_score:
+            best_samples = samples
+            best_score = diversity_score
+    
+    # If we didn't find better samples, use default
+    if best_samples is None:
+        noise = np.random.normal(0, 1, size=(100, config['g_input_dim']))
+        best_samples = gan_model.generator.predict(noise, verbose=0)
+    
+    # Save the samples
+    samples_path = f"results/models/comparison/{model_name}_samples.npy"
+    np.save(samples_path, best_samples)
+    print(f"GAN samples saved to {samples_path}")
+    
+    # Save models with proper file extension (.keras or .h5)
+    gan_model.generator.save(f"results/models/comparison/{model_name}_generator.keras")
+    gan_model.discriminator.save(f"results/models/comparison/{model_name}_discriminator.keras")
+    
+    # Save some samples as well (similar to VAE)
+    samples = gan_model.generate_samples(100)
+    samples_path = f"results/models/comparison/{model_name}_samples.npy"
+    np.save(samples_path, samples)
+    
+    return gan_model
 
 #===============================================================================
 # Evaluation Functions
@@ -498,18 +547,41 @@ def evaluate_models(models, n_samples=25, dataset="mnist"):
     size_labels = {'small': 'Small', 'large': 'Large', 'xlarge': 'XLarge'}
     
     # Generate samples for each model and size
-    for model_name, model_group in models.items():
-        for size, model in model_group.items():
+    for model_type in ['rbm', 'dbn', 'vae', 'gan']:
+        for size in ['small', 'large', 'xlarge']:
+            print(f"Generating samples for {model_type.upper()} - {size.upper()}")
+            
             # Create a figure for this model and configuration
             fig, axes = plt.subplots(5, 5, figsize=(10, 10))
             axes = axes.flatten()
             
-            # Generate samples
-            if model_name in ['rbm', 'dbn']:
+            # Get model if available
+            model = models.get(model_type, {}).get(size, None)
+            
+            # Generate or load samples
+            if model_type in ['rbm', 'dbn'] and model is not None:
+                # Generate samples for RBM and DBN from model
                 samples = model.generate_samples(n_samples, gibbs_steps=200)
                 samples = samples[:25]  # Take first 25 samples
-            else:  # VAE or GAN
-                samples = model.generate_samples(25)
+            elif model_type in ['vae', 'gan']:
+                if model is not None:
+                    # Generate samples from proxy models
+                    samples = model.generate_samples(25)
+                else:
+                    # Try to load samples from saved files
+                    samples_path = f"results/models/comparison/{model_type}_{size}_samples.npy"
+                    try:
+                        samples = np.load(samples_path)
+                        samples = samples[:25]  # Take first 25 samples
+                        print(f"Loaded samples from {samples_path}")
+                    except:
+                        print(f"WARNING: Could not load samples for {model_type}_{size}")
+                        # Create empty samples as fallback
+                        samples = np.zeros((25, 784))
+            else:
+                print(f"WARNING: No model found for {model_type}_{size}")
+                # Create empty samples as fallback
+                samples = np.zeros((25, 784))
             
             # Display 5x5 grid of samples
             for k in range(min(25, len(samples))):
@@ -518,15 +590,109 @@ def evaluate_models(models, n_samples=25, dataset="mnist"):
                 axes[k].axis('off')
             
             # Set title for the figure
-            plt.suptitle(f'{model_labels[model_name]} - {size_labels[size]}', fontsize=16)
+            plt.suptitle(f'{model_labels[model_type]} - {size_labels[size]}', fontsize=16)
             
             # Save individual figure
+            plot_path = f"results/plots/comparison/{model_type}_{size}_{dataset}.png"
             plt.tight_layout()
-            plt.savefig(f"results/plots/comparison/{model_name}_{size}_{dataset}.png")
+            plt.savefig(plot_path)
             plt.close()
+            print(f"Saved plot to {plot_path}")
     
     # Print completion message
     print(f"Model evaluation completed. Generated samples saved to results/plots/comparison/")
+
+#===============================================================================
+# Parallel Training Function
+#===============================================================================
+
+def train_model_for_size(model_type, size, X_train, X_val, config, nb_epochs, batch_size, learning_rate):
+    """Wrapper function to train a specific model type with given size configuration."""
+    print(f"Starting training {model_type.upper()} - {size.upper()}")
+    
+    model_name = f"{model_type}_{size}"
+    
+    if model_type == 'rbm':
+        model = train_rbm(
+            X_train, X_val, 
+            config=config, 
+            nb_epochs=nb_epochs, 
+            batch_size=batch_size, 
+            learning_rate=learning_rate,
+            model_name=model_name
+        )
+        # For RBM and DBN, we return the actual model since they're picklable
+        return model_type, size, model
+        
+    elif model_type == 'dbn':
+        model = train_dbn(
+            X_train, X_val, 
+            config=config, 
+            nb_epochs=nb_epochs, 
+            batch_size=batch_size, 
+            learning_rate=learning_rate,
+            model_name=model_name
+        )
+        # For RBM and DBN, we return the actual model since they're picklable
+        return model_type, size, model
+        
+    elif model_type == 'vae':
+        model = train_vae(
+            X_train, X_val, 
+            config=config, 
+            nb_epochs=nb_epochs, 
+            batch_size=batch_size,
+            model_name=model_name
+        )
+        # For VAE, don't return the model (it's not picklable)
+        # Instead, generate samples and return a proxy object with the generate_samples method
+        samples = model.generate_samples(100)
+        
+        # Create a lightweight, picklable object with only the generate_samples method
+        class VaeProxy:
+            def __init__(self, samples):
+                self.samples = samples
+                
+            def generate_samples(self, n_samples):
+                # Return a subset of the pre-generated samples
+                return self.samples[:n_samples]
+        
+        proxy = VaeProxy(samples)
+        
+        # Verify that samples can be properly accessed
+        test_sample = proxy.generate_samples(1)
+        print(f"VAE proxy sample shape: {test_sample.shape}")
+        
+        return model_type, size, proxy
+        
+    elif model_type == 'gan':
+        model = train_gan(
+            X_train, X_val, 
+            config=config, 
+            nb_epochs=nb_epochs, 
+            batch_size=batch_size,
+            model_name=model_name
+        )
+        # For GAN, similarly create a proxy with pre-generated samples
+        samples = model.generate_samples(100)
+        
+        class GanProxy:
+            def __init__(self, samples):
+                self.samples = samples
+                
+            def generate_samples(self, n_samples):
+                return self.samples[:n_samples]
+        
+        proxy = GanProxy(samples)
+        
+        # Verify that samples can be properly accessed
+        test_sample = proxy.generate_samples(1)
+        print(f"GAN proxy sample shape: {test_sample.shape}")
+        
+        return model_type, size, proxy
+        
+    else:
+        raise ValueError(f"Unknown model type: {model_type}")
 
 #===============================================================================
 # Main Function
@@ -561,55 +727,39 @@ def main():
     batch_size = 100
     learning_rate = 0.01
     
-    # Train models for each size configuration
+    # Create a list of training tasks
+    training_tasks = []
     for size in ['small', 'large', 'xlarge']:
-        print(f"\n=== Training {size.upper()} models ===\n")
-        
-        # Train RBM
-        rbm = train_rbm(
-            X_train, X_val, 
-            config=MODEL_CONFIGS[size]['rbm'], 
-            nb_epochs=nb_epochs, 
-            batch_size=batch_size, 
-            learning_rate=learning_rate,
-            model_name=f"rbm_{size}"
-        )
-        trained_models['rbm'][size] = rbm
-        
-        # Train DBN
-        dbn = train_dbn(
-            X_train, X_val, 
-            config=MODEL_CONFIGS[size]['dbn'], 
-            nb_epochs=nb_epochs, 
-            batch_size=batch_size, 
-            learning_rate=learning_rate,
-            model_name=f"dbn_{size}"
-        )
-        trained_models['dbn'][size] = dbn
-        
-        # Train VAE
-        vae = train_vae(
-            X_train, X_val, 
-            config=MODEL_CONFIGS[size]['vae'], 
-            nb_epochs=nb_epochs, 
-            batch_size=batch_size,
-            model_name=f"vae_{size}"
-        )
-        trained_models['vae'][size] = vae
-        
-        # Train GAN
-        gan = train_gan(
-            X_train, X_val, 
-            config=MODEL_CONFIGS[size]['gan'], 
-            nb_epochs=nb_epochs, 
-            batch_size=batch_size,
-            model_name=f"gan_{size}"
-        )
-        trained_models['gan'][size] = gan
+        for model_type in ['rbm', 'dbn', 'vae', 'gan']:
+            config = MODEL_CONFIGS[size][model_type]
+            training_tasks.append(
+                delayed(train_model_for_size)(
+                    model_type, size, X_train, X_val, 
+                    config, nb_epochs, batch_size, learning_rate
+                )
+            )
+    
+    # Run training tasks in parallel - limit to 4 processes to avoid GPU memory issues
+    print(f"\n=== Starting parallel training of {len(training_tasks)} models ===\n")
+    results = Parallel(n_jobs=4, verbose=10)(training_tasks)
+    
+    # Organize results into the trained_models dictionary
+    for model_type, size, model in results:
+        trained_models[model_type][size] = model
     
     # Evaluate models
     print("\n=== Evaluating models ===\n")
+    # Ensure all trained models are included
+    print(f"Models ready for evaluation: {list(trained_models.keys())}")
+    for model_type in trained_models:
+        print(f"  {model_type}: {list(trained_models[model_type].keys())}")
+    
     evaluate_models(trained_models, n_samples=25, dataset="mnist")
+    
+    # Also save the trained_models dictionary for potential later use
+    os.makedirs("results/models/comparison", exist_ok=True)
+    with open("results/models/comparison/trained_model_proxies.pkl", "wb") as f:
+        pickle.dump(trained_models, f)
     
     print("\nAll model training and evaluation completed!")
 
