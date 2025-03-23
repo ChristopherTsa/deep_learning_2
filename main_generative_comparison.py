@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from time import time
 import tensorflow as tf
 from tensorflow import keras
-from tensorflow.keras import layers, Model, optimizers
+from tensorflow.keras import layers
 from sklearn.model_selection import train_test_split
 # Add joblib for parallelization
 from joblib import Parallel, delayed
@@ -32,25 +32,25 @@ tf.random.set_seed(42)
 # Configuration dictionary as per table
 MODEL_CONFIGS = {
     'small': {
-        'rbm': {'n_hidden': 20, 'params': '~16484'},
-        'dbn': {'layer_sizes': [784, 20, 20], 'params': '~16924'},
-        'vae': {'encoder_dims': [784, 256, 128], 'latent_dim': 2, 'decoder_dims': [128, 256, 784], 'params': '~16768'},
+        'rbm': {'n_hidden': 20},
+        'dbn': {'layer_sizes': [784, 20, 20]},
+        'vae': {'encoder_dims': [784, 256, 128], 'latent_dim': 2, 'decoder_dims': [128, 256, 784]},
         'gan': {'g_input_dim': 2, 'g_hidden_dim': 6, 'g_output_dim': 784, 'g_depth': 1,
-                'd_input_dim': 784, 'd_hidden_dim': 14, 'd_output_dim': 1, 'd_depth': 1, 'params': '~16511'}
+                'd_input_dim': 784, 'd_hidden_dim': 14, 'd_output_dim': 1, 'd_depth': 1}
     },
     'large': {
-        'rbm': {'n_hidden': 100, 'params': '~79284'},
-        'dbn': {'layer_sizes': [784, 82, 82, 82], 'params': '~78930'},
-        'vae': {'encoder_dims': [784, 512, 256], 'latent_dim': 10, 'decoder_dims': [256, 512, 784], 'params': '~79236'},
+        'rbm': {'n_hidden': 100},
+        'dbn': {'layer_sizes': [784, 82, 82, 82]},
+        'vae': {'encoder_dims': [784, 512, 256], 'latent_dim': 10, 'decoder_dims': [256, 512, 784]},
         'gan': {'g_input_dim': 10, 'g_hidden_dim': 16, 'g_output_dim': 784, 'g_depth': 2,
-                'd_input_dim': 784, 'd_hidden_dim': 64, 'd_output_dim': 1, 'd_depth': 2, 'params': '~78945'}
+                'd_input_dim': 784, 'd_hidden_dim': 64, 'd_output_dim': 1, 'd_depth': 2}
     },
     'xlarge': {
-        'rbm': {'n_hidden': 500, 'params': '~393284'},
-        'dbn': {'layer_sizes': [784, 256, 256, 256, 256], 'params': '~399888'},
-        'vae': {'encoder_dims': [784, 1024, 512], 'latent_dim': 64, 'decoder_dims': [512, 1024, 784], 'params': '~390944'},
+        'rbm': {'n_hidden': 500},
+        'dbn': {'layer_sizes': [784, 256, 256, 256, 256]},
+        'vae': {'encoder_dims': [784, 1024, 512], 'latent_dim': 64, 'decoder_dims': [512, 1024, 784]},
         'gan': {'g_input_dim': 32, 'g_hidden_dim': 64, 'g_output_dim': 784, 'g_depth': 3,
-                'd_input_dim': 784, 'd_hidden_dim': 160, 'd_output_dim': 1, 'd_depth': 3, 'params': '~386705'}
+                'd_input_dim': 784, 'd_hidden_dim': 160, 'd_output_dim': 1, 'd_depth': 3}
     }
 }
 
@@ -277,6 +277,110 @@ def build_gan(g_input_dim, g_hidden_dim, g_output_dim, g_depth,
     
     return GANModel(generator, discriminator, gan)
 
+def train_gan(X_train, X_val=None, config=None, nb_epochs=100, batch_size=100, model_name="gan_small"):
+    """Train a GAN model with given configuration using standard Keras."""
+    print(f"Training GAN with generator: {config['g_input_dim']}->{config['g_hidden_dim']}->{config['g_output_dim']} (depth: {config['g_depth']}), "
+          f"discriminator: {config['d_input_dim']}->{config['d_hidden_dim']}->{config['d_output_dim']} (depth: {config['d_depth']})...")
+    
+    # Build GAN
+    gan_model = build_gan(
+        g_input_dim=config['g_input_dim'],
+        g_hidden_dim=config['g_hidden_dim'],
+        g_output_dim=config['g_output_dim'],
+        g_depth=config['g_depth'],
+        d_input_dim=config['d_input_dim'],
+        d_hidden_dim=config['d_hidden_dim'],
+        d_output_dim=config['d_output_dim'],
+        d_depth=config['d_depth']
+    )
+    
+    # Train the GAN model
+    d_losses = []
+    g_losses = []
+    
+    for epoch in range(nb_epochs):
+        start_time = time()
+        
+        d_epoch_loss = 0
+        g_epoch_loss = 0
+        num_batches = 0
+        
+        # Create dataset and shuffle
+        indices = np.random.permutation(len(X_train))
+        X_shuffled = X_train[indices]
+        
+        # Train in batches
+        for i in range(0, len(X_train), batch_size):
+            # Get batch
+            X_batch = X_shuffled[i:i+batch_size]
+            batch_size_actual = len(X_batch)
+            
+            # Generate fake samples
+            noise = np.random.normal(0, 1, size=(batch_size_actual, config['g_input_dim']))
+            generated_images = gan_model.generator.predict(noise, verbose=0)
+            
+            # Labels for real and fake samples
+            real_labels = np.ones((batch_size_actual, 1))
+            fake_labels = np.zeros((batch_size_actual, 1))
+            
+            # Train discriminator
+            gan_model.discriminator.trainable = True
+            d_loss_real = gan_model.discriminator.train_on_batch(X_batch, real_labels)[0]
+            d_loss_fake = gan_model.discriminator.train_on_batch(generated_images, fake_labels)[0]
+            d_loss = 0.5 * (d_loss_real + d_loss_fake)
+            
+            # Train generator
+            gan_model.discriminator.trainable = False
+            noise = np.random.normal(0, 1, size=(batch_size_actual*2, config['g_input_dim']))
+            misleading_labels = np.ones((batch_size_actual*2, 1))
+            g_loss = gan_model.gan.train_on_batch(noise, misleading_labels)
+            
+            # Update epoch losses
+            d_epoch_loss += d_loss
+            g_epoch_loss += g_loss
+            num_batches += 1
+        
+        # Calculate average losses for the epoch
+        d_epoch_loss /= num_batches
+        g_epoch_loss /= num_batches
+        d_losses.append(d_epoch_loss)
+        g_losses.append(g_epoch_loss)
+        
+        # Print progress
+        print(f"Epoch {epoch+1}/{nb_epochs} - {time() - start_time:.2f}s - d_loss: {d_epoch_loss:.4f} - g_loss: {g_epoch_loss:.4f}")
+        
+        # Validate if validation data is provided
+        if X_val is not None and (epoch + 1) % 5 == 0:  # Validate every 5 epochs
+            val_samples = min(1000, len(X_val))
+            idx = np.random.choice(len(X_val), val_samples, replace=False)
+            X_val_sample = X_val[idx]
+            
+            # Make sure discriminator is trainable for evaluation
+            gan_model.discriminator.trainable = True
+            
+            # Generate fake samples
+            noise = np.random.normal(0, 1, size=(val_samples, config['g_input_dim']))
+            fake_samples = gan_model.generator.predict(noise, verbose=0)
+            
+            # Evaluate discriminator
+            d_loss_real = gan_model.discriminator.evaluate(X_val_sample, np.ones((val_samples, 1)), verbose=0)[0]
+            d_loss_fake = gan_model.discriminator.evaluate(fake_samples, np.zeros((val_samples, 1)), verbose=0)[0]
+            d_val_loss = 0.5 * (d_loss_real + d_loss_fake)
+            
+            # Print validation loss
+            print(f"  Validation - d_loss: {d_val_loss:.4f}")
+    
+    # Save models with proper file extension (.keras or .h5)
+    gan_model.generator.save(f"results/models/comparison/{model_name}_generator.keras")
+    gan_model.discriminator.save(f"results/models/comparison/{model_name}_discriminator.keras")
+    
+    # Save some samples as well
+    samples = gan_model.generate_samples(100)
+    samples_path = f"results/models/comparison/{model_name}_samples.npy"
+    np.save(samples_path, samples)
+    
+    return gan_model
+
 #===============================================================================
 # Model Training Functions
 #===============================================================================
@@ -300,6 +404,11 @@ def train_rbm(X_train, X_val=None, config=None, nb_epochs=100, batch_size=100, l
     model_path = f"results/models/comparison/{model_name}.pkl"
     with open(model_path, 'wb') as f:
         pickle.dump(rbm, f)
+    
+    # Generate and save samples for consistency with other models
+    samples = rbm.generate_samples(100, gibbs_steps=500)
+    samples_path = f"results/models/comparison/{model_name}_samples.npy"
+    np.save(samples_path, samples)
     
     return rbm
 
@@ -357,174 +466,6 @@ def train_vae(X_train, X_val=None, config=None, nb_epochs=100, batch_size=100, m
     
     return vae
 
-def train_gan(X_train, X_val=None, config=None, nb_epochs=100, batch_size=100, model_name="gan_small"):
-    """Train a GAN model with given configuration using standard Keras."""
-    print(f"Training GAN with generator: {config['g_input_dim']}->{config['g_hidden_dim']}->{config['g_output_dim']} (depth: {config['g_depth']}), "
-          f"discriminator: {config['d_input_dim']}->{config['d_hidden_dim']}->{config['d_output_dim']} (depth: {config['d_depth']})...")
-    
-    # Build GAN
-    gan_model = build_gan(
-        g_input_dim=config['g_input_dim'],
-        g_hidden_dim=config['g_hidden_dim'],
-        g_output_dim=config['g_output_dim'],
-        g_depth=config['g_depth'],
-        d_input_dim=config['d_input_dim'],
-        d_hidden_dim=config['d_hidden_dim'],
-        d_output_dim=config['d_output_dim'],
-        d_depth=config['d_depth']
-    )
-    
-    # Train the GAN model
-    d_losses = []
-    g_losses = []
-    
-    for epoch in range(nb_epochs):
-        start_time = time()
-        
-        d_epoch_loss = 0
-        g_epoch_loss = 0
-        num_batches = 0
-        
-        # Create dataset and shuffle
-        indices = np.random.permutation(len(X_train))
-        X_shuffled = X_train[indices]
-        
-        # Train in batches
-        for i in range(0, len(X_train), batch_size):
-            # Get batch
-            X_batch = X_shuffled[i:i+batch_size]
-            batch_size_actual = len(X_batch)
-            
-            # Generate fake samples
-            noise = np.random.normal(0, 1, size=(batch_size_actual, config['g_input_dim']))
-            generated_images = gan_model.generator.predict(noise, verbose=0)
-            
-            # IMPROVEMENT 1: Label smoothing - use 0.9 for real and 0.1 for fake instead of 1 and 0
-            # These softer labels make the discriminator less confident and improve training
-            real_labels = 0.9 * np.ones((batch_size_actual, 1))
-            fake_labels = 0.1 * np.ones((batch_size_actual, 1))
-            
-            # IMPROVEMENT 2: Add noise to discriminator inputs to improve robustness
-            # Add small random noise to real and generated samples
-            noise_factor = 0.05
-            X_batch_noisy = X_batch + noise_factor * np.random.normal(0, 1, X_batch.shape)
-            generated_images_noisy = generated_images + noise_factor * np.random.normal(0, 1, generated_images.shape)
-            
-            # Clip values to valid range [0, 1]
-            X_batch_noisy = np.clip(X_batch_noisy, 0.0, 1.0)
-            generated_images_noisy = np.clip(generated_images_noisy, 0.0, 1.0)
-            
-            # Train discriminator on real and fake samples
-            gan_model.discriminator.trainable = True
-            d_loss_real = gan_model.discriminator.train_on_batch(X_batch_noisy, real_labels)[0]
-            d_loss_fake = gan_model.discriminator.train_on_batch(generated_images_noisy, fake_labels)[0]
-            d_loss = 0.5 * (d_loss_real + d_loss_fake)
-            
-            # IMPROVEMENT 3: Train generator multiple times for each discriminator update
-            # This helps prevent the discriminator from becoming too strong
-            gan_model.discriminator.trainable = False
-            gen_iterations = 2  # Train generator twice for each discriminator update
-            g_loss_total = 0
-            
-            for _ in range(gen_iterations):
-                # Generate new noise
-                noise = np.random.normal(0, 1, size=(batch_size_actual, config['g_input_dim']))
-                # Use real labels (1s) for generator training
-                g_labels = np.ones((batch_size_actual, 1))
-                # Train generator
-                g_loss = gan_model.gan.train_on_batch(noise, g_labels)
-                g_loss_total += g_loss
-            
-            g_loss = g_loss_total / gen_iterations
-            
-            # Update epoch losses
-            d_epoch_loss += d_loss
-            g_epoch_loss += g_loss
-            num_batches += 1
-        
-        # Calculate average losses for the epoch
-        d_epoch_loss /= num_batches
-        g_epoch_loss /= num_batches
-        d_losses.append(d_epoch_loss)
-        g_losses.append(g_epoch_loss)
-        
-        # Print progress
-        print(f"Epoch {epoch+1}/{nb_epochs} - {time() - start_time:.2f}s - d_loss: {d_epoch_loss:.4f} - g_loss: {g_epoch_loss:.4f}")
-        
-        # IMPROVEMENT 4: Early stopping based on running averages of losses
-        # If we have enough epochs and losses are diverging, stop
-        if epoch > 10 and len(d_losses) > 5 and len(g_losses) > 5:
-            # Calculate running averages
-            d_avg_recent = np.mean(d_losses[-5:])
-            d_avg_earlier = np.mean(d_losses[-10:-5])
-            g_avg_recent = np.mean(g_losses[-5:])
-            g_avg_earlier = np.mean(g_losses[-10:-5])
-            
-            # Check if losses are diverging badly
-            if (d_avg_recent < 0.1 * d_avg_earlier) or (g_avg_recent > 5 * g_avg_earlier):
-                print("Training appears to be diverging. Stopping early.")
-                break
-        
-        # Validate if validation data is provided
-        if X_val is not None and (epoch + 1) % 5 == 0:  # Validate every 5 epochs
-            val_samples = min(1000, len(X_val))
-            idx = np.random.choice(len(X_val), val_samples, replace=False)
-            X_val_sample = X_val[idx]
-            
-            # Make sure discriminator is trainable for evaluation
-            gan_model.discriminator.trainable = True
-            
-            # Generate fake samples
-            noise = np.random.normal(0, 1, size=(val_samples, config['g_input_dim']))
-            fake_samples = gan_model.generator.predict(noise, verbose=0)
-            
-            # Evaluate discriminator
-            d_loss_real = gan_model.discriminator.evaluate(X_val_sample, np.ones((val_samples, 1)), verbose=0)[0]
-            d_loss_fake = gan_model.discriminator.evaluate(fake_samples, np.zeros((val_samples, 1)), verbose=0)[0]
-            d_val_loss = 0.5 * (d_loss_real + d_loss_fake)
-            
-            # Print validation loss
-            print(f"  Validation - d_loss: {d_val_loss:.4f}")
-    
-    # Save best samples at different points during training
-    # Generate and save 100 samples
-    best_samples = None
-    best_score = float('inf')
-    
-    # Try generating samples at different noise scales
-    for scale in [0.8, 1.0, 1.2]:
-        noise = np.random.normal(0, scale, size=(100, config['g_input_dim']))
-        samples = gan_model.generator.predict(noise, verbose=0)
-        
-        # Simple diversity score: use standard deviation as a proxy for diversity
-        diversity_score = np.std(samples)
-        
-        # Update best samples if these have more diversity
-        if diversity_score > best_score:
-            best_samples = samples
-            best_score = diversity_score
-    
-    # If we didn't find better samples, use default
-    if best_samples is None:
-        noise = np.random.normal(0, 1, size=(100, config['g_input_dim']))
-        best_samples = gan_model.generator.predict(noise, verbose=0)
-    
-    # Save the samples
-    samples_path = f"results/models/comparison/{model_name}_samples.npy"
-    np.save(samples_path, best_samples)
-    print(f"GAN samples saved to {samples_path}")
-    
-    # Save models with proper file extension (.keras or .h5)
-    gan_model.generator.save(f"results/models/comparison/{model_name}_generator.keras")
-    gan_model.discriminator.save(f"results/models/comparison/{model_name}_discriminator.keras")
-    
-    # Save some samples as well (similar to VAE)
-    samples = gan_model.generate_samples(100)
-    samples_path = f"results/models/comparison/{model_name}_samples.npy"
-    np.save(samples_path, samples)
-    
-    return gan_model
-
 #===============================================================================
 # Evaluation Functions
 #===============================================================================
@@ -560,8 +501,8 @@ def evaluate_models(models, n_samples=25, dataset="mnist"):
             
             # Generate or load samples
             if model_type in ['rbm', 'dbn'] and model is not None:
-                # Generate samples for RBM and DBN from model
-                samples = model.generate_samples(n_samples, gibbs_steps=200)
+                # Generate samples for RBM and DBN from model - standard 500 Gibbs steps
+                samples = model.generate_samples(n_samples, gibbs_steps=500)
                 samples = samples[:25]  # Take first 25 samples
             elif model_type in ['vae', 'gan']:
                 if model is not None:
@@ -601,6 +542,29 @@ def evaluate_models(models, n_samples=25, dataset="mnist"):
     
     # Print completion message
     print(f"Model evaluation completed. Generated samples saved to results/plots/comparison/")
+
+#===============================================================================
+# Proxy classes for pickling models
+#===============================================================================
+
+# Define proxy classes at module level so they can be pickled
+class VaeProxy:
+    """Proxy class for VAE to make it picklable."""
+    def __init__(self, samples):
+        self.samples = samples
+        
+    def generate_samples(self, n_samples):
+        # Return a subset of the pre-generated samples
+        return self.samples[:n_samples]
+
+
+class GanProxy:
+    """Proxy class for GAN to make it picklable."""
+    def __init__(self, samples):
+        self.samples = samples
+        
+    def generate_samples(self, n_samples):
+        return self.samples[:n_samples]
 
 #===============================================================================
 # Parallel Training Function
@@ -648,15 +612,7 @@ def train_model_for_size(model_type, size, X_train, X_val, config, nb_epochs, ba
         # Instead, generate samples and return a proxy object with the generate_samples method
         samples = model.generate_samples(100)
         
-        # Create a lightweight, picklable object with only the generate_samples method
-        class VaeProxy:
-            def __init__(self, samples):
-                self.samples = samples
-                
-            def generate_samples(self, n_samples):
-                # Return a subset of the pre-generated samples
-                return self.samples[:n_samples]
-        
+        # Use the module-level VaeProxy class instead of defining it here
         proxy = VaeProxy(samples)
         
         # Verify that samples can be properly accessed
@@ -676,13 +632,7 @@ def train_model_for_size(model_type, size, X_train, X_val, config, nb_epochs, ba
         # For GAN, similarly create a proxy with pre-generated samples
         samples = model.generate_samples(100)
         
-        class GanProxy:
-            def __init__(self, samples):
-                self.samples = samples
-                
-            def generate_samples(self, n_samples):
-                return self.samples[:n_samples]
-        
+        # Use the module-level GanProxy class instead of defining it here
         proxy = GanProxy(samples)
         
         # Verify that samples can be properly accessed
@@ -741,7 +691,7 @@ def main():
     
     # Run training tasks in parallel - limit to 4 processes to avoid GPU memory issues
     print(f"\n=== Starting parallel training of {len(training_tasks)} models ===\n")
-    results = Parallel(n_jobs=4, verbose=10)(training_tasks)
+    results = Parallel(n_jobs=-1, verbose=10)(training_tasks)
     
     # Organize results into the trained_models dictionary
     for model_type, size, model in results:
