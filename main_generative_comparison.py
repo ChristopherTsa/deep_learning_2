@@ -493,20 +493,17 @@ def evaluate_models(models, n_samples=25, dataset="mnist"):
     dataset: str
         Dataset name for figure title
     """
-    # Number of models and sizes
-    n_models = len(models)
-    n_sizes = len(models['rbm'])
-    
-    # Create a figure
-    fig, axes = plt.subplots(n_models, n_sizes, figsize=(5*n_sizes, 5*n_models))
-    
     # Model labels and size labels
     model_labels = {'rbm': 'RBM', 'dbn': 'DBN', 'vae': 'VAE', 'gan': 'GAN'}
     size_labels = {'small': 'Small', 'large': 'Large', 'xlarge': 'XLarge'}
     
     # Generate samples for each model and size
-    for i, (model_name, model_group) in enumerate(models.items()):
-        for j, (size, model) in enumerate(model_group.items()):
+    for model_name, model_group in models.items():
+        for size, model in model_group.items():
+            # Create a figure for this model and configuration
+            fig, axes = plt.subplots(5, 5, figsize=(10, 10))
+            axes = axes.flatten()
+            
             # Generate samples
             if model_name in ['rbm', 'dbn']:
                 samples = model.generate_samples(n_samples, gibbs_steps=200)
@@ -516,22 +513,20 @@ def evaluate_models(models, n_samples=25, dataset="mnist"):
             
             # Display 5x5 grid of samples
             for k in range(min(25, len(samples))):
-                row, col = k // 5, k % 5
                 sample = samples[k].reshape(28, 28)
-                
-                # Calculate subplot index
-                ax = axes[i][j] if n_sizes > 1 else axes[i]
-                ax.imshow(sample, cmap='gray')
-                ax.axis('off')
-                ax.set_title(f'{model_labels[model_name]} - {size_labels[size]}')
+                axes[k].imshow(sample, cmap='gray')
+                axes[k].axis('off')
+            
+            # Set title for the figure
+            plt.suptitle(f'{model_labels[model_name]} - {size_labels[size]}', fontsize=16)
+            
+            # Save individual figure
+            plt.tight_layout()
+            plt.savefig(f"results/plots/comparison/{model_name}_{size}_{dataset}.png")
+            plt.close()
     
-    # Save figure
-    plt.tight_layout()
-    plt.savefig(f"results/plots/comparison/model_comparison_{dataset}.png")
-    plt.close()
-
     # Print completion message
-    print(f"Model evaluation completed. Generated samples saved to results/plots/comparison/model_comparison_{dataset}.png")
+    print(f"Model evaluation completed. Generated samples saved to results/plots/comparison/")
 
 #===============================================================================
 # Main Function
